@@ -1,0 +1,15 @@
+# 运行时图鉴状态与 MCP 采样（含个人消费记录，不入库）
+data/
+output/
+demo/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# 系统 / 编辑器
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

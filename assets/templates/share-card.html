@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>麦麦图鉴 · 我的足迹</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+    background: #f6f0e6;
+    display: flex; justify-content: center; padding: 32px 16px;
+  }
+  .card {
+    width: 420px; border-radius: 20px; overflow: hidden;
+    background: #ffffff;
+    box-shadow: 0 12px 40px rgba(218, 41, 28, .18);
+  }
+  .head {
+    background: linear-gradient(135deg, #DA291C 0%, #b81f14 100%);
+    color: #fff; padding: 26px 24px 22px; text-align: center;
+  }
+  .head .logo { font-size: 26px; font-weight: 800; letter-spacing: 2px; }
+  .head .slogan { font-size: 12px; opacity: .85; margin-top: 6px; }
+  .head .big { font-size: 34px; font-weight: 800; margin-top: 14px; }
+  .head .big small { font-size: 14px; font-weight: 400; opacity: .8; }
+  .head .title { display: inline-block; margin-top: 10px; font-size: 13px;
+    background: #FFC72C; color: #7a4b00; font-weight: 700;
+    padding: 4px 14px; border-radius: 999px; }
+  .books { display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 8px; padding: 16px 20px 4px; }
+  .cell { background: #fdf3e3; border-radius: 12px; padding: 10px 4px; text-align: center; }
+  .cell .num { font-size: 22px; font-weight: 800; color: #DA291C; }
+  .cell .cap { font-size: 11px; color: #8a6d3b; margin-top: 2px; }
+  .section { padding: 14px 22px 4px; }
+  .section h3 { font-size: 12px; color: #b0894a; letter-spacing: 1px; margin-bottom: 8px; }
+  .prow { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
+  .prow .pl { width: 64px; font-size: 12px; color: #5b4636; }
+  .pbar { flex: 1; height: 8px; background: #f0e6d2; border-radius: 99px; overflow: hidden; }
+  .pfill { height: 100%; background: linear-gradient(90deg, #FFC72C, #DA291C); border-radius: 99px; }
+  .prow .pv { width: 52px; text-align: right; font-size: 11px; color: #9c8465; }
+  .badges { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 22px 0; }
+  .badge { font-size: 11px; background: #fff4d6; border: 1px solid #f2d488;
+    color: #8a5a00; border-radius: 999px; padding: 3px 10px; }
+  .badge.muted { background: #f5f5f5; border-color: #e0e0e0; color: #aaa; }
+  .loves { margin: 14px 22px 0; background: #fdf6ea; border-radius: 14px;
+    padding: 12px 14px; }
+  .loves .row { display: flex; justify-content: space-between;
+    font-size: 13px; padding: 4px 0; color: #4a3a28; }
+  .loves .row b { color: #DA291C; }
+  .ur { margin: 10px 22px 0; text-align: center; font-size: 12px; color: #7a4b00;
+    background: linear-gradient(90deg, #fff2c9, #ffe1a8, #fff2c9);
+    border-radius: 999px; padding: 6px 10px; }
+  .foot { text-align: center; font-size: 11px; color: #c2ab8c;
+    padding: 16px 0 18px; letter-spacing: 1px; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="head">
+      <div class="logo">🍟 麦麦图鉴</div>
+      <div class="slogan">每一次点单，点亮图鉴里的一页</div>
+      <div class="big">{{UNLOCKED}} <small>/ {{POOL_TOTAL}} 款</small></div>
+      <div class="title">{{LEVEL}}</div>
+    </div>
+    <div class="books">{{BOOK_CELLS}}</div>
+    <div class="section">
+      <h3>分册进度</h3>
+      {{PROGRESS_ROWS}}
+    </div>
+    <div class="badges">{{BADGES}}</div>
+    <div class="loves">
+      <div class="row"><span>最爱的味道</span><b>{{FAVORITE}}</b></div>
+      <div class="row"><span>最珍贵的收藏</span><b>{{TREASURE}}</b></div>
+    </div>
+    <div class="ur">💎 绝版款 × {{UR_COUNT}} —— 时代眼泪，买不到的荣耀</div>
+    <div class="foot">McD Codex · 麦麦图鉴 · 非麦当劳官方产品</div>
+  </div>
+</body>
+</html>

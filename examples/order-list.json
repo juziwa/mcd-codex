@@ -1,0 +1,430 @@
+{
+  "success": true,
+  "code": 200,
+  "message": "请求成功",
+  "datetime": "DEMO SNAPSHOT",
+  "traceId": "DEMO",
+  "data": {
+    "list": [
+      {
+        "orderId": "DEMO-0001",
+        "orderType": "1",
+        "createTime": "2026-09-26 16:31:49",
+        "beType": "1",
+        "beCode": "",
+        "storeCode": "1421051",
+        "storeName": "麦当劳深圳利联星龙园餐厅",
+        "orderStatus": "订单已完成",
+        "orderProductList": [
+          {
+            "productCode": "9900013476",
+            "productName": "随心配1+1",
+            "quantity": 1,
+            "comboItemList": [
+              {
+                "productCode": "521316",
+                "name": "高达吉士双牛堡",
+                "quantity": 1
+              },
+              {
+                "productCode": "4106",
+                "name": "香芋派",
+                "quantity": 1
+              }
+            ]
+          },
+          {
+            "productCode": "9900013476",
+            "productName": "随心配1+1",
+            "quantity": 1,
+            "comboItemList": [
+              {
+                "productCode": "521316",
+                "name": "高达吉士双牛堡",
+                "quantity": 1
+              },
+              {
+                "productCode": "4106",
+                "name": "香芋派",
+                "quantity": 1
+              }
+            ]
+          }
+        ],
+        "realTotalAmount": "0"
+      },
+      {
+        "orderId": "DEMO-0002",
+        "orderType": "2",
+        "createTime": "2026-08-30 09:25:50",
+        "beType": "2",
+        "beCode": "144004002",
+        "storeCode": "1440040",
+        "storeName": "麦当劳珠海唐家福乐购百货餐厅",
+        "orderStatus": "订单已完成",
+        "orderProductList": [
+          {
+            "productCode": "9900003034",
+            "productName": "图林根香肠早安营养卷套餐",
+            "quantity": 1,
+            "comboItemList": [
+              {
+                "productCode": "902323",
+                "name": "图林根香肠早安营养卷",
+                "quantity": 1
+              },
+              {
+                "productCode": "902631",
+                "name": "脆香油条",
+                "quantity": 1
+              },
+              {
+                "productCode": "901089",
+                "name": "优品豆浆大杯",
+                "quantity": 1
+              }
+            ]
+          }
+        ],
+        "realTotalAmount": "27.5"
+      },
+      {
+        "orderId": "DEMO-0003",
+        "orderType": "2",
+        "createTime": "2026-08-25 18:17:45",
+        "beType": "2",
+        "beCode": "144004002",
+        "storeCode": "1440040",
+        "storeName": "麦当劳珠海唐家福乐购百货餐厅",
+        "orderStatus": "订单已完成",
+        "orderProductList": [
+          {
+            "productCode": "9900012170",
+            "productName": "大堡口福五件套(麦金卡免配)",
+            "quantity": 1,
+            "comboItemList": [
+              {
+                "productCode": "521879",
+                "name": "泰式炭烤风味猪猪堡",
+                "quantity": 1
+              },
+              {
+                "productCode": "501205",
+                "name": "中薯条",
+                "quantity": 1
+              },
+              {
+                "productCode": "901401",
+                "name": "麦乐鸡5块",
+                "quantity": 1
+              },
+              {
+                "productCode": "904106",
+                "name": "香芋派",
+                "quantity": 1
+              },
+              {
+                "productCode": "903100",
+                "name": "可口可乐大杯",
+                "quantity": 1
+              }
+            ]
+          }
+        ],
+        "realTotalAmount": "35.9"
+      },
+      {
+        "orderId": "DEMO-0004",
+        "orderType": "2",
+        "createTime": "2026-08-23 18:46:56",
+        "beType": "2",
+        "beCode": "144004002",
+        "storeCode": "1440040",
+        "storeName": "麦当劳珠海唐家福乐购百货餐厅",
+        "orderStatus": "订单已取消",
+        "orderProductList": [
+          {
+            "productCode": "9900015255",
+            "productName": "蘸酱炸鸡鸳鸯锅",
+            "quantity": 1,
+            "comboItemList": [
+              {
+                "productCode": "521803",
+                "name": "韩式甜辣酱鸡块",
+                "quantity": 1
+              },
+              {
+                "productCode": "516013",
+                "name": "麦辣鸡翅-2块",
+                "quantity": 1
+              },
+              {
+                "productCode": "521801",
+                "name": "麦辣大四角",
+                "quantity": 2
+              },
+              {
+                "productCode": "521799",
+                "name": "日式鲜磨山葵酱",
+                "quantity": 1
+              },
+              {
+                "productCode": "521797",
+                "name": "北美招牌牧场酱",
+                "quantity": 1
+              }
+            ]
+          },
+          {
+            "productCode": "9900010341",
+            "productName": "鸡肉汉堡单人餐随心选【升级小食送酱】",
+            "quantity": 1,
+            "comboItemList": [
+              {
+                "productCode": "901406",
+                "name": "板烧鸡腿堡",
+                "quantity": 1
+              },
+              {
+                "productCode": "515106",
+                "name": "麦乐鸡4块",
+                "quantity": 1
+              },
+              {
+                "productCode": "501206",
+                "name": "大薯条",
+                "quantity": 1
+              },
+              {
+                "productCode": "903050",
+                "name": "可口可乐中杯",
+                "quantity": 1
+              }
+            ]
+          }
+        ],
+        "realTotalAmount": "77.8"
+      },
+      {
+        "orderId": "DEMO-0005",
+        "orderType": "1",
+        "createTime": "2026-07-10 13:42:46",
+        "beType": "1",
+        "beCode": "",
+        "storeCode": "1400236",
+        "storeName": "麦当劳广州火车东站餐厅",
+        "orderStatus": "订单已完成",
+        "orderProductList": [
+          {
+            "productCode": "9900004064",
+            "productName": "精选单人餐三件套 ",
+            "quantity": 1,
+            "comboItemList": [
+              {
+                "productCode": "1440",
+                "name": "麦辣鸡腿汉堡",
+                "quantity": 1
+              },
+              {
+                "productCode": "4810",
+                "name": "中薯条",
+                "quantity": 1
+              },
+              {
+                "productCode": "3050",
+                "name": "可乐中杯",
+                "quantity": 1
+              }
+            ]
+          }
+        ],
+        "realTotalAmount": "49"
+      },
+      {
+        "orderId": "DEMO-0006",
+        "orderType": "1",
+        "createTime": "2026-07-05 18:48:33",
+        "beType": "1",
+        "beCode": "",
+        "storeCode": "1440019",
+        "storeName": "麦当劳珠海虹晖一路餐厅",
+        "orderStatus": "订单已完成",
+        "orderProductList": [
+          {
+            "productCode": "9900015093",
+            "productName": "薯条八重奏",
+            "quantity": 1,
+            "comboItemList": [
+              {
+                "productCode": "4810",
+                "name": "中薯条",
+                "quantity": 8
+              }
+            ]
+          }
+        ],
+        "realTotalAmount": "0"
+      },
+      {
+        "orderId": "DEMO-0007",
+        "orderType": "2",
+        "createTime": "2026-07-05 18:47:21",
+        "beType": "2",
+        "beCode": "144001902",
+        "storeCode": "1440019",
+        "storeName": "麦当劳珠海虹晖一路餐厅",
+        "orderStatus": "订单已完成",
+        "orderProductList": [
+          {
+            "productCode": "9900014756",
+            "productName": "枫糖风味厚松饼猪柳堡四件套",
+            "quantity": 1,
+            "comboItemList": [
+              {
+                "productCode": "521731",
+                "name": "枫糖风味厚松饼猪柳堡",
+                "quantity": 1
+              },
+              {
+                "productCode": "521732",
+                "name": "脆薯饼",
+                "quantity": 1
+              },
+              {
+                "productCode": "901401",
+                "name": "麦乐鸡5块",
+                "quantity": 1
+              },
+              {
+                "productCode": "903050",
+                "name": "可口可乐中杯",
+                "quantity": 1
+              }
+            ]
+          }
+        ],
+        "realTotalAmount": "39.9"
+      },
+      {
+        "orderId": "DEMO-0008",
+        "orderType": "2",
+        "createTime": "2026-07-02 12:11:20",
+        "beType": "2",
+        "beCode": "144003402",
+        "storeCode": "1440034",
+        "storeName": "麦当劳珠海金湾商都餐厅",
+        "orderStatus": "订单已完成",
+        "orderProductList": [
+          {
+            "productCode": "9900010341",
+            "productName": "鸡肉汉堡单人餐随心选（麦金卡免配）",
+            "quantity": 1,
+            "comboItemList": [
+              {
+                "productCode": "901440",
+                "name": "麦辣鸡腿汉堡",
+                "quantity": 1
+              },
+              {
+                "productCode": "515106",
+                "name": "麦乐鸡4块",
+                "quantity": 1
+              },
+              {
+                "productCode": "501206",
+                "name": "大薯条",
+                "quantity": 1
+              },
+              {
+                "productCode": "903050",
+                "name": "可口可乐中杯",
+                "quantity": 1
+              }
+            ]
+          }
+        ],
+        "realTotalAmount": "34.9"
+      },
+      {
+        "orderId": "DEMO-0009",
+        "orderType": "2",
+        "createTime": "2026-06-24 19:55:54",
+        "beType": "2",
+        "beCode": "144003402",
+        "storeCode": "1440034",
+        "storeName": "麦当劳珠海金湾商都餐厅",
+        "orderStatus": "订单已完成",
+        "orderProductList": [
+          {
+            "productCode": "9900010341",
+            "productName": "鸡肉汉堡单人餐随心选（麦金卡免配）",
+            "quantity": 1,
+            "comboItemList": [
+              {
+                "productCode": "901440",
+                "name": "麦辣鸡腿汉堡",
+                "quantity": 1
+              },
+              {
+                "productCode": "515106",
+                "name": "麦乐鸡4块",
+                "quantity": 1
+              },
+              {
+                "productCode": "501206",
+                "name": "大薯条",
+                "quantity": 1
+              },
+              {
+                "productCode": "903050",
+                "name": "可口可乐中杯",
+                "quantity": 1
+              }
+            ]
+          }
+        ],
+        "realTotalAmount": "34.9"
+      },
+      {
+        "orderId": "DEMO-0010",
+        "orderType": "2",
+        "createTime": "2026-06-21 17:39:44",
+        "beType": "2",
+        "beCode": "144001902",
+        "storeCode": "1440019",
+        "storeName": "麦当劳珠海虹晖一路餐厅",
+        "orderStatus": "订单已完成",
+        "orderProductList": [
+          {
+            "productCode": "9900014693",
+            "productName": "世界波牛堡单人餐(麦金卡免配)",
+            "quantity": 1,
+            "comboItemList": [
+              {
+                "productCode": "1106",
+                "name": "培根蔬萃双层牛堡",
+                "quantity": 1
+              },
+              {
+                "productCode": "515106",
+                "name": "麦乐鸡4块",
+                "quantity": 1
+              },
+              {
+                "productCode": "501205",
+                "name": "中薯条",
+                "quantity": 1
+              },
+              {
+                "productCode": "903100",
+                "name": "可口可乐大杯",
+                "quantity": 1
+              }
+            ]
+          }
+        ],
+        "realTotalAmount": "38.9"
+      }
+    ]
+  }
+}
