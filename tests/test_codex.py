@@ -13,8 +13,10 @@
 """
 
 import json
+import copy
 import os
 import shutil
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -258,6 +260,51 @@ class TestCatalogBuild(unittest.TestCase):
         for book in catalog_mod.BOOKS:
             self.assertIn(book, pool)
 
+    def test_failed_or_empty_menu_response_is_rejected(self):
+        cat = catalog_mod.Catalog()
+        with self.assertRaises(catalog_mod.CatalogPayloadError):
+            cat.absorb_menu({"success": False, "message": "鉴权失败"})
+        with self.assertRaises(catalog_mod.CatalogPayloadError):
+            cat.absorb_menu({"success": True, "data": {
+                "categories": [], "meals": {}}})
+        self.assertEqual(len(cat), 0)
+
+    def test_malformed_menu_preserves_existing_state(self):
+        cat = catalog_mod.Catalog()
+        cat.absorb_menu(_menu_payload([("OLD", "薯条")]))
+        before = copy.deepcopy(cat.__dict__)
+        valid = _menu_payload([("NEW", "巨无霸")])
+        cases = [None, [], "{", {"data": []},
+                 {"success": False, "data": valid["data"]},
+                 {"code": 401, "data": valid["data"]}]
+        for field in ("categories", "meals"):
+            for value in (None, 0, "bad"):
+                bad = copy.deepcopy(valid)
+                bad["data"][field] = value
+                cases.append(bad)
+            bad = copy.deepcopy(valid)
+            del bad["data"][field]
+            cases.append(bad)
+        for category in (None, {"name": 1}, {"name": "bad", "meals": "bad"},
+                         {"name": "bad", "meals": [None]},
+                         {"name": "bad", "meals": [{"code": 1}]},
+                         {"name": "bad", "meals": [{"code": "NEW", "tags": [{}]}]}):
+            bad = copy.deepcopy(valid)
+            bad["data"]["categories"].append(category)
+            cases.append(bad)
+        for payload in cases:
+            with self.subTest(payload=payload):
+                with self.assertRaises(catalog_mod.CatalogPayloadError):
+                    cat.absorb_menu(payload)
+                self.assertEqual(cat.__dict__, before)
+
+    def test_structured_response_without_status_fields_is_supported(self):
+        payload = _menu_payload([("A1", "薯条")])
+        del payload["success"]
+        cat = catalog_mod.Catalog()
+        cat.absorb_menu(payload)
+        self.assertTrue(cat.is_on_sale("A1", "薯条"))
+
 
 # ===========================================================================
 # 3. CodexStore — 收录 / 幂等 / 取消单 / 同品合并 / UR 复活
@@ -376,6 +423,15 @@ class TestAbsorbOrder(unittest.TestCase):
 
 
 class TestReclassifyRevive(unittest.TestCase):
+    def test_empty_catalog_preserves_existing_rarity(self):
+        store = codex_mod.CodexStore()
+        cat = catalog_mod.Catalog()
+        cat.absorb_menu(_menu_payload([("A1", "薯条")]))
+        store.absorb_order(_order("O1", "订单已完成", [("A1", "薯条", 1, None)]), cat)
+        before = copy.deepcopy(store.items)
+        self.assertEqual(store.reclassify(catalog_mod.Catalog()), [])
+        self.assertEqual(store.items, before)
+
     def test_ur_revives_when_menu_reappears(self):
         store = codex_mod.CodexStore()
         cat = catalog_mod.Catalog()
@@ -511,7 +567,7 @@ class TestCli(unittest.TestCase):
         old = sys.stdout
         sys.stdout = buf
         try:
-            codex_mod.main(argv)
+            self.last_exit_code = codex_mod.main(argv)
         finally:
             sys.stdout = old
         return json.loads(buf.getvalue())
@@ -561,6 +617,72 @@ class TestCli(unittest.TestCase):
         r = self._run(["stats", "--codex", self.cdx])
         self.assertEqual(r["stats"]["unlocked"], 0)
         self.assertEqual(r["stats"]["title"], "麦门新客")
+
+    def test_sync_without_catalog_does_not_mark_items_ur(self):
+        # 菜单池缺失时按降级模式收录，不能把所有历史餐品误判为绝版。
+        r = self._run(["sync", "--orders", os.path.join(EXAMPLES, "order-list.json"),
+                       "--codex", self.cdx, "--catalog", self.cat])
+        self.assertGreater(r["stats"]["unlocked"], 0)
+        self.assertEqual(r["stats"]["ur_count"], 0)
+        catalog_mod.Catalog().save(self.cat)
+        r = self._run(["sync", "--orders", os.path.join(EXAMPLES, "order-list.json"),
+                       "--codex", os.path.join(self.tmp, "empty-pool-codex.json"),
+                       "--catalog", self.cat])
+        self.assertGreater(r["stats"]["unlocked"], 0)
+        self.assertEqual(r["stats"]["ur_count"], 0)
+
+    def test_cli_reports_failed_menu_without_overwriting_catalog(self):
+        bad = os.path.join(self.tmp, "bad-menu.json")
+        with open(bad, "w", encoding="utf-8") as f:
+            json.dump({"success": False, "message": "鉴权失败"}, f)
+        r = self._run(["absorb-menu", "--menu", bad, "--catalog", self.cat])
+        self.assertFalse(r["ok"])
+        self.assertEqual(self.last_exit_code, 2)
+        self.assertFalse(os.path.exists(self.cat))
+        self._run(["absorb-menu", "--menu", os.path.join(EXAMPLES, "menu-regular.json"),
+                   "--catalog", self.cat])
+        with open(self.cat, "rb") as f:
+            before = f.read()
+        for payload in ('{"success": false}', '{', '{"data": {"categories": []}}'):
+            with self.subTest(payload=payload):
+                with open(bad, "w", encoding="utf-8") as f:
+                    f.write(payload)
+                r = self._run(["absorb-menu", "--menu", bad, "--catalog", self.cat])
+                self.assertFalse(r["ok"])
+                self.assertEqual(self.last_exit_code, 2)
+                with open(self.cat, "rb") as f:
+                    self.assertEqual(f.read(), before)
+
+    def test_failed_breakfast_batch_preserves_catalog_and_exit_code(self):
+        self._run(["absorb-menu", "--menu", os.path.join(EXAMPLES, "menu-regular.json"),
+                   "--catalog", self.cat])
+        with open(self.cat, "rb") as f:
+            before = f.read()
+        menu = os.path.join(self.tmp, "new-menu.json")
+        bad = os.path.join(self.tmp, "bad-breakfast.json")
+        with open(menu, "w", encoding="utf-8") as f:
+            json.dump(_menu_payload([("NEW", "新餐品")]), f)
+        with open(bad, "w", encoding="utf-8") as f:
+            json.dump({"success": False}, f)
+        result = subprocess.run([
+            sys.executable, os.path.join(ROOT, "scripts", "codex.py"), "absorb-menu",
+            "--menu", menu, "--breakfast-menu", bad, "--catalog", self.cat,
+        ], capture_output=True, encoding="utf-8", cwd=self.tmp)
+        self.assertEqual(result.returncode, 2)
+        self.assertFalse(json.loads(result.stdout)["ok"])
+        self.assertEqual(result.stderr, "")
+        with open(self.cat, "rb") as f:
+            self.assertEqual(f.read(), before)
+
+    def test_valid_menu_batch_saves_both_periods(self):
+        r = self._run(["absorb-menu", "--menu", os.path.join(EXAMPLES, "menu-regular.json"),
+                       "--breakfast-menu", os.path.join(EXAMPLES, "menu-breakfast.json"),
+                       "--catalog", self.cat, "--store", "DEMO"])
+        self.assertTrue(r["ok"])
+        self.assertEqual(self.last_exit_code, 0)
+        cat = catalog_mod.Catalog.load(self.cat)
+        self.assertEqual({s["period"] for s in cat.sources}, {"regular", "breakfast"})
+        self.assertEqual(len(cat), 148)
 
     def test_default_paths_rooted_at_project_root(self):
         # 回归 P2: CLI 默认路径锚定脚本上级目录, 而非 cwd

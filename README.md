@@ -75,6 +75,16 @@ git clone https://github.com/juziwa/mcd-codex.git
 cp -r mcd-codex ~/.workbuddy/skills/mcd-codex
 ```
 
+Windows PowerShell 可使用：
+
+```powershell
+git clone https://github.com/juziwa/mcd-codex.git
+Copy-Item -Recurse -Force .\mcd-codex "$HOME\.workbuddy\skills\mcd-codex"
+```
+
+配置中的 `${MCD_MCP_TOKEN}` 仅是占位符。请在本地 MCP 客户端按其文档配置环境变量，
+或只在本地配置文件中替换为你申请的 Token；不要把真实 Token 写入仓库或对话。
+
 ### 3 · 打开图鉴
 
 对智能体说：
@@ -107,7 +117,7 @@ python scripts/codex.py render --codex demo/codex.json \
 python -m unittest discover -s tests -v
 ```
 
-68 个用例覆盖单元（归一化/稀有度/册别）、集成（收录/CLI/渲染）、
+76 个用例覆盖单元（归一化/稀有度/册别）、集成（收录/CLI/渲染）、
 边界（取消单/幂等/空数据/无池降级/UR 复活）与真实数据回归。
 测试报告见 [docs/test-report.md](docs/test-report.md)。
 

@@ -3,7 +3,7 @@
 
 图鉴池 = 多时段采样的 query-meals 菜单合集。麦当劳菜单按餐段返回
 （早餐品仅出现在早餐时段菜单），因此需对同一门店分别采样
-「常规时段」（不传 reservationDate）与「早餐时段」（传次日 10:00）
+「常规时段」（不传 reservationDate）与「早餐时段」（传实际日期 10:00）
 后合并，才能支撑可靠的绝版（UR）判定。
 
 册别（六册）:
@@ -15,6 +15,10 @@ import os
 import re
 
 import rarity
+
+
+class CatalogPayloadError(ValueError):
+    """Raised when a query-meals response cannot safely update the catalog."""
 
 # ---------------------------------------------------------------------------
 # 册别常量
@@ -120,10 +124,53 @@ class Catalog:
         :return: (新增数, 更新数)
         """
         if isinstance(menu_payload, str):
-            menu_payload = json.loads(menu_payload)
-        data = menu_payload.get("data") or {}
-        categories = data.get("categories") or []
-        meals_map = data.get("meals") or {}
+            try:
+                menu_payload = json.loads(menu_payload)
+            except json.JSONDecodeError as exc:
+                raise CatalogPayloadError("query-meals 响应不是有效 JSON") from exc
+        if not isinstance(menu_payload, dict):
+            raise CatalogPayloadError("query-meals 响应不是 JSON 对象")
+        # 部分 MCP 客户端只保留 data；若有状态字段，则必须明确表示成功。
+        if ("success" in menu_payload and menu_payload["success"] is not True
+                or "code" in menu_payload and menu_payload["code"] not in (200, "200")):
+            raise CatalogPayloadError("query-meals 返回失败，已保留原图鉴池")
+        data = menu_payload.get("data")
+        if not isinstance(data, dict):
+            raise CatalogPayloadError("query-meals 响应缺少有效 data")
+        categories = data.get("categories")
+        meals_map = data.get("meals")
+        if not isinstance(categories, list) or not isinstance(meals_map, dict):
+            raise CatalogPayloadError("query-meals 响应缺少有效 categories/meals")
+
+        # 先完整验证再修改，避免一份响应的后半段损坏时留下半份菜单。
+        menu_count = 0
+        for category in categories:
+            if (not isinstance(category, dict)
+                    or (category.get("name") is not None
+                        and not isinstance(category.get("name"), str))
+                    or not isinstance(category.get("meals", []), list)):
+                raise CatalogPayloadError("query-meals 分类结构无效")
+            for meal in category.get("meals", []):
+                if not isinstance(meal, dict):
+                    raise CatalogPayloadError("query-meals 餐品结构无效")
+                code = meal.get("code")
+                if not isinstance(code, str) or not code.strip():
+                    raise CatalogPayloadError("query-meals 餐品缺少编码")
+                info = meals_map.get(code) or {}
+                if not isinstance(info, dict):
+                    raise CatalogPayloadError("query-meals 餐品详情无效")
+                fallback_name = meal.get("name") or code
+                if not isinstance(info.get("name") or fallback_name, str):
+                    raise CatalogPayloadError("query-meals 餐品名称无效")
+                if not isinstance(info.get("image") or "", str):
+                    raise CatalogPayloadError("query-meals 餐品图片字段无效")
+                tags = meal.get("tags", [])
+                if not isinstance(tags, list) or any(not isinstance(t, str) for t in tags):
+                    raise CatalogPayloadError("query-meals 餐品标签无效")
+                menu_count += 1
+        # 空菜单可能是未营业或无供应，不能据此宣告历史餐品绝版。
+        if menu_count == 0:
+            raise CatalogPayloadError("query-meals 响应不含可用餐品，已跳过图鉴池更新")
 
         added, updated = 0, 0
         for cat in categories:

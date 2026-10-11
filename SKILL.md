@@ -49,19 +49,20 @@ python "<Skill根目录>/scripts/codex.py" stats
 | 场景 | 调用链 |
 |---|---|
 | 首次打开 / 增量补录 | `order-list` → 存快照 → `sync` |
-| 图鉴池构建（每 1-2 周一次） | `query-nearby-stores`（拿常用门店 storeCode）→ `query-meals`（不传 reservationDate，当前时段）→ `query-meals`（传 reservationDate=次日 10:00，早餐时段）→ 存快照 → `absorb-menu` ×2 |
+| 用户请求后更新图鉴池（建议每 1-2 周一次） | `now-time-info` → `query-nearby-stores`（拿常用门店 storeCode）→ 两次 `query-meals` → 存快照 → 一次事务式 `absorb-menu` |
 | 下单收录（主动收录） | 走正常点单流程（`query-meals` → `calculate-price` → `create-order` → `query-order` 确认已支付）→ 存订单快照 → `absorb-order` |
 | 绝版检测 | `absorb-menu` 更新池后 `sync` 自动重判（含 UR 复活） |
 | 查看图鉴 / 分享 | `render` → 向用户展示 codex.md；分享卡用文件卡片呈现 |
 
 **query-meals 参数速查**：到店自取 `beType=1, orderType=1`，不传 beCode；
-早餐采样在常规参数基础上加 `reservationDate: "yyyy-MM-dd 10:00"`。
+早餐采样在常规参数基础上加 `reservationDate: "yyyy-MM-dd 10:00"`。先调用
+`now-time-info` 获取北京时间并计算下一天日期，**不得把“次日 10:00”原样作为参数**。
 
 ## 流程编排
 
 ### 流程 A · 打开图鉴（含冷启动补录）
 
-1. 调 `mcp__mcd-mcp__order-list`（无参数），把响应 JSON 完整保存到
+1. 用户明确请求打开图鉴后，调 `mcp__mcd-mcp__order-list`（无参数），把响应 JSON 完整保存到
    `data/snapshots/order-list.json`
 2. 执行：
    ```bash
@@ -69,7 +70,7 @@ python "<Skill根目录>/scripts/codex.py" stats
      --orders data/snapshots/order-list.json \
      --codex data/codex.json --catalog data/catalog.json
    ```
-3. 若 `data/catalog.json` 不存在或超过 2 周未更新，先执行流程 C 更新图鉴池
+3. 若 `data/catalog.json` 不存在或超过 2 周未更新，先执行流程 C 更新图鉴池；菜单调用失败时保留旧池并停止本次重判
 4. 解读 CLI 输出的 JSON：
    - `new_unlocks` → 逐条向用户播报「点亮了 XX！」
    - 冷启动首次补录 → 「发现你的 X 款历史足迹，图鉴已激活！」
@@ -95,15 +96,15 @@ python "<Skill根目录>/scripts/codex.py" stats
    取用户常用门店 storeCode（提示用户确认或直接用收藏门店）
 2. `query-meals`（storeCode, beType=1, orderType=1）→ 存
    `data/snapshots/menu-regular.json`
-3. `query-meals`（同上 + `reservationDate="次日 10:00"`）→ 存
+3. `query-meals`（同上 + 下一天实际日期的 `reservationDate="yyyy-MM-dd 10:00"`）→ 存
    `data/snapshots/menu-breakfast.json`
-4. 执行：
+4. 两份菜单快照都成功后，用一次事务式命令更新图鉴池：
    ```bash
    python scripts/codex.py absorb-menu --menu data/snapshots/menu-regular.json \
+     --breakfast-menu data/snapshots/menu-breakfast.json \
      --catalog data/catalog.json --period regular --store {storeCode}
-   python scripts/codex.py absorb-menu --menu data/snapshots/menu-breakfast.json \
-     --catalog data/catalog.json --period breakfast --store {storeCode}
    ```
+   只有常规和早餐快照都通过校验时才会写入图鉴池；任一失败都会保留旧池。
 5. 再跑一次流程 A 的 sync，稀有度与绝版状态会自动重判
 
 ### 流程 D · 展示与分享
@@ -134,4 +135,5 @@ python scripts/codex.py render --codex data/codex.json \
 - `order-list` 仅返回最近 10 单：定位为增量补录，不承诺「导入全部历史」
 - 用户绕过本 Skill 直接在官方 APP 下单：靠每次打开图鉴时的补录兜底
 - 图鉴数据（codex.json）属个人消费记录，只保存在用户本地
+- MCP 调用只在用户请求后按需执行，不做后台轮询、批量循环或定时自动调用；快照不得上传或分享
 - 非麦当劳官方产品；餐品在售状态以麦当劳官方渠道实时结果为准

@@ -70,7 +70,8 @@ R   其余
 图鉴池对同一门店采样两次：
 
 - 常规时段：不传 `reservationDate`
-- 早餐时段：`reservationDate = 次日 10:00`
+- 早餐时段：先用 `now-time-info` 取得北京时间，计算下一天日期，再传
+  `reservationDate = "yyyy-MM-dd 10:00"`；不得传入中文相对日期。
 
 合并后 periods 记录每个品出现的时段集合。
 **UR 复活机制**：每次菜单池更新后全量重判，UR 可能自动回到在售。

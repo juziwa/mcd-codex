@@ -48,6 +48,19 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 def _default(rel_path):
     return os.path.join(ROOT, rel_path)
 
+
+def _load_catalog_if_available(path):
+    """Load a usable catalog, treating missing/empty files as no catalog.
+
+    An empty catalog is not evidence that every historical item is off-menu.
+    Keeping it as ``None`` prevents transient MCP failures from creating false
+    UR classifications during sync.
+    """
+    if not path or not os.path.exists(path):
+        return None
+    catalog = catalog_mod.Catalog.load(path)
+    return catalog if len(catalog) else None
+
 # ---------------------------------------------------------------------------
 # 等级体系（按点亮单品总数）
 # ---------------------------------------------------------------------------
@@ -160,6 +173,7 @@ class CodexStore:
         """
         code = str(code or "")
         name = str(name or code)
+        catalog = catalog if catalog is not None and len(catalog) else None
         matched = catalog.match(code, name)[0] if catalog is not None else None
         key = str(matched) if matched else "n:" + rarity_mod.normalize_name(name)
         item = self.items.get(key)
@@ -205,6 +219,8 @@ class CodexStore:
 
     def reclassify(self, catalog):
         """全量重判（UR 复活机制: 菜单池扩充后 UR 可能回到在售）。"""
+        if catalog is None or not len(catalog):
+            return []
         revived = []
         for key, item in self.items.items():
             before = item.get("rarity")
@@ -324,11 +340,28 @@ def _emit(obj):
 # ---------------------------------------------------------------------------
 def cmd_absorb_menu(args):
     cat = catalog_mod.Catalog.load(args.catalog)
-    payload = _load_json(args.menu)
-    added, updated = cat.absorb_menu(payload, period=args.period, store=args.store)
+    try:
+        payload = _load_json(args.menu)
+        added, updated = cat.absorb_menu(payload, period=args.period, store=args.store)
+        if args.breakfast_menu:
+            extra_added, extra_updated = cat.absorb_menu(
+                _load_json(args.breakfast_menu), period="breakfast", store=args.store)
+            added += extra_added
+            updated += extra_updated
+    except (catalog_mod.CatalogPayloadError, json.JSONDecodeError,
+            UnicodeError, OSError) as exc:
+        _emit({
+            "action": "absorb-menu",
+            "ok": False,
+            "catalog": args.catalog,
+            "error": (str(exc) if isinstance(exc, catalog_mod.CatalogPayloadError)
+                      else "菜单快照无法读取或不是有效 UTF-8 JSON，已保留原图鉴池"),
+        })
+        return 2
     cat.save(args.catalog)
     _emit({
         "action": "absorb-menu",
+        "ok": True,
         "catalog": args.catalog,
         "period": args.period,
         "pool_size": len(cat),
@@ -339,7 +372,7 @@ def cmd_absorb_menu(args):
 
 def cmd_absorb_order(args):
     store = CodexStore.load(args.codex)
-    cat = catalog_mod.Catalog.load(args.catalog) if args.catalog else None
+    cat = _load_catalog_if_available(args.catalog)
     orders = extract_orders(_load_json(args.order))
     new_all, bump_all = [], []
     for order in orders:
@@ -364,7 +397,7 @@ def cmd_absorb_order(args):
 
 def cmd_sync(args):
     store = CodexStore.load(args.codex)
-    cat = catalog_mod.Catalog.load(args.catalog) if args.catalog else None
+    cat = _load_catalog_if_available(args.catalog)
     orders = extract_orders(_load_json(args.orders))
     new_all = []
     for order in orders:
@@ -384,14 +417,14 @@ def cmd_sync(args):
 
 def cmd_stats(args):
     store = CodexStore.load(args.codex)
-    cat = catalog_mod.Catalog.load(args.catalog) if args.catalog else None
+    cat = _load_catalog_if_available(args.catalog)
     _emit({"action": "stats", "stats": store.stats(cat)})
 
 
 def cmd_render(args):
     import render
     store = CodexStore.load(args.codex)
-    cat = catalog_mod.Catalog.load(args.catalog) if args.catalog else None
+    cat = _load_catalog_if_available(args.catalog)
     outputs = {}
     if args.out_md:
         _ensure_parent(args.out_md)
@@ -411,6 +444,7 @@ def build_parser():
 
     p = sub.add_parser("absorb-menu", help="合并一份 query-meals 菜单快照进图鉴池")
     p.add_argument("--menu", required=True, help="query-meals 响应 JSON 文件")
+    p.add_argument("--breakfast-menu", help="可选早餐快照；两份菜单均有效后才保存图鉴池")
     p.add_argument("--catalog", default=_default("data/catalog.json"))
     p.add_argument("--period", default="regular", choices=["regular", "breakfast"])
     p.add_argument("--store", default="")
@@ -447,8 +481,9 @@ def build_parser():
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
-    args.func(args)
+    result = args.func(args)
+    return result if isinstance(result, int) else 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

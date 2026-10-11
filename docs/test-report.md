@@ -7,11 +7,11 @@
 
 | 指标 | 结果 |
 |---|---|
-| 用例总数 | **68** |
-| 通过 | **68** |
+| 用例总数 | **76** |
+| 通过 | **76** |
 | 失败 / 错误 | 0 |
 | 测试耗时 | ~0.7s |
-| 测试后发现缺陷 | **3 个（均已修复并补回归用例）** |
+| 测试后发现缺陷 | **5 个（均已修复并补回归用例）** |
 
 ## 二、测试范围
 
@@ -23,13 +23,13 @@
 | 单元 | `TestIsLimited` | 2 | 联名关键词入限定册、上新普通品不入册 |
 | 单元 | `TestBookOf` | 3 | 分类优先、名称兜底、默认册 |
 | 单元 | `TestCatalogMatching` | 6 | 四通道匹配（code / 名称 / 别名 / 弱匹配）、未命中、在售判定 |
-| 单元 | `TestCatalogBuild` | 5 | 时段合并、幂等、tags 合并、同名多 code、真实快照池规模 |
+| 单元 | `TestCatalogBuild` | 8 | 时段合并、幂等、tags 合并、同名多 code、真实快照池规模、失败响应拒绝、原子回滚、无状态字段兼容 |
 | 集成 | `TestAbsorbOrder` | 13 | 组合餐展开、单品直购、取消单、订单幂等、数量累加、同品合并、口味槽位合并、无池降级、门店聚合、首次点亮时间不变 |
-| 集成 | `TestReclassifyRevive` | 1 | UR 复活机制 |
-| 单元 | `TestStats` | 4 | 等级 9 个边界值、3 类徽章、最爱/珍宝 |
+| 集成 | `TestReclassifyRevive` | 2 | UR 复活机制、空池保护 |
+| 单元 | `TestStats` | 5 | 等级 9 个边界值、3 类徽章、最爱/珍宝 |
 | 集成 | `TestRender` | 5 | Markdown 六册与剪影、分享卡占位符零残留、无池渲染、默认模板回落、模板路径存在性 |
-| 集成 | `TestCli` | 7 | 全链路 CLI、CLI 幂等、渲染产物、缺失 codex 容错、订单形态解析、默认路径锚定、跨 cwd 执行 |
-| 回归 | `TestRealDataRegression` | 5 | 真实订单数据：取消单排除、UR 准确性、同品合并计数、册别归属、统计合理性、重复补录稳定 |
+| 集成 | `TestCli` | 11 | 全链路 CLI、CLI 幂等、渲染产物、缺失 codex 容错、订单形态解析、默认路径锚定、跨 cwd 执行、缺失池降级、失败响应保护、双时段事务、双时段成功 |
+| 回归 | `TestRealDataRegression` | 6 | 真实订单数据：取消单排除、UR 准确性、同品合并计数、册别归属、统计合理性、重复补录稳定 |
 
 ## 三、测试中发现的缺陷与修复
 
@@ -88,8 +88,17 @@
 - **实测**：工作目录设为 `D:/比赛材料/麦当劳`，直接调用
   `~/.workbuddy/skills/mcd-codex/scripts/codex.py stats|render` →
   正常输出，产物正确落于 Skill 根目录 `output/`。
+
 - **回归用例**：`test_default_paths_rooted_at_project_root`、
   `test_cli_runs_from_other_cwd`、`test_share_card_default_template_from_any_cwd`
+
+### 缺陷 5（高）：菜单接口失败时可能误判全部历史餐品为 UR
+
+- **现象**：菜单请求失败或返回空数据时，空图鉴池会被当作有效池，历史餐品被标记为 UR。
+- **修复**：校验 `success`、`data.categories` 和 `data.meals`；空菜单拒绝写入；缺失/空图鉴池按“暂无菜单池”处理，不触发 UR 重判。
+- **回归覆盖**：`test_failed_or_empty_menu_response_is_rejected`、
+  `test_cli_reports_failed_menu_without_overwriting_catalog`、
+  `test_sync_without_catalog_does_not_mark_items_ur`
 
 ## 四、真实 MCP 端到端验证
 

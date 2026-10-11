@@ -15,7 +15,7 @@
 
 | Tool | 用途 | 在本项目中的角色 |
 |---|---|---|
-| `order-list` | 查询历史订单（最近 10 单） | **增量补录通道**：每次打开图鉴自动补录，兜底防漏 |
+| `order-list` | 查询历史订单（最近 10 单） | **用户请求后的增量补录通道**：打开图鉴时按需补录，兜底防漏 |
 | `query-nearby-stores` | 查询附近门店 | 定位用户常用门店，获取 `storeCode` 供菜单采样 |
 | `query-meals` | 查询当前可售餐品列表 | **图鉴池构建**：双时段采样（当前时段 + 早餐时段），获取 code/name/image/tags，支撑稀有度判定与绝版检测 |
 | `query-meal-detail` | 查询餐品详情及套餐组成 | 套餐拆解参考：理解组合餐结构，保证「单品级收录」口径一致 |
@@ -41,17 +41,21 @@ order-list
 ### ② 图鉴池构建（每 1-2 周更新）
 
 ```
+now-time-info → 计算北京时间的下一天日期
 query-nearby-stores (beType=1, searchType=2, city, keyword)
   └→ 取常用门店 storeCode
 query-meals (storeCode, beType=1, orderType=1)              ← 当前时段菜单
 query-meals (storeCode, beType=1, orderType=1,
-             reservationDate="次日 10:00")                   ← 早餐时段菜单
-  └→ 保存两份快照 → scripts/codex.py absorb-menu ×2
+             reservationDate="yyyy-MM-dd 10:00")              ← 早餐时段菜单
+  └→ 保存两份快照 → scripts/codex.py absorb-menu（一次事务式合并）
        └→ 合并为多时段菜单池 data/catalog.json（148+ 款）
 ```
 
 **为什么要双时段采样**：麦当劳菜单按餐段返回，早餐品（麦满分、营养卷、油条）
 仅出现在早餐时段菜单。只采当前时段会把大量早餐品误判为绝版（UR）。
+
+MCP 调用仅在用户明确请求后按需执行；本项目不做后台轮询、批量循环或定时自动调用。
+如果任一菜单响应失败或不含有效餐品，本次不会覆盖已有图鉴池，也不会触发 UR 重判。
 
 ### ③ 下单收录（主动收录，100% 可靠）
 
