@@ -127,9 +127,14 @@
   .cell.locked{background:#F8F4EC;border-style:dashed;border-color:#E4D9C8}
   .cell.locked .thumb{background:radial-gradient(circle at 50% 42%,#FBF6EC,#F1E9DA)}
   /* 官方产品图是白底 PNG: 直接压黑会得到一整块黑砖。
-     用 multiply 混合 + 降透明度, 白底自动融进纸色, 只剩产品轮廓 —— 真正的「剪影」。*/
-  .cell.locked .thumb img.sil{mix-blend-mode:multiply;filter:grayscale(1) contrast(1.05);
-    opacity:.42}
+     用 multiply 混合 + 降透明度, 白底自动融进纸色, 只剩产品轮廓 —— 真正的「剪影」。
+     blur 是必需的: 官方图右上角自带「100% 纯牛肉」「限时特惠」等角标,
+     不糊掉就等于把答案写在剪影上。伪元素再压一层纸色, 双保险。*/
+  .cell.locked .thumb img.sil{mix-blend-mode:multiply;
+    filter:grayscale(1) contrast(1.02) blur(.9px);opacity:.42}
+  .cell.locked .thumb::after{content:"";position:absolute;top:2px;right:2px;z-index:2;
+    width:54%;height:44%;pointer-events:none;
+    background:radial-gradient(125% 125% at 100% 0,rgba(245,239,230,.995) 50%,rgba(245,239,230,0) 84%)}
   .cell.locked figcaption b{color:#B6A695;letter-spacing:2px}
   .cell.locked:hover{border-color:#D6C7AF}
   .cell.locked:hover .thumb img.sil{opacity:.58}
