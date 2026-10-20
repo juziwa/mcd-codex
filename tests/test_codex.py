@@ -130,20 +130,27 @@ class TestClassify(unittest.TestCase):
             rarity_mod.classify("马苏里拉拉丝芝士条", tags=["上新"]),
             rarity_mod.RARITY_SSR)
 
-    def test_ssr_breakfast_only(self):
-        # 仅早餐时段供应 → 限时 SSR
+    def test_promo_tag_is_not_limited(self):
+        # 「限定特惠」是打折而不是限定商品（回归: 4 款麦咖啡被打成 SSR）
         self.assertEqual(
-            rarity_mod.classify("脆香油条", periods={"breakfast"}),
-            rarity_mod.RARITY_SSR)
-
-    def test_regular_period_is_not_limited(self):
-        # 回归: regular 单时段不得判 SSR（开发期缺陷 2）
-        self.assertEqual(
-            rarity_mod.classify("薯条", periods={"regular"}),
+            rarity_mod.classify("麦咖啡™美式", tags=["冷饮", "限定特惠"]),
             rarity_mod.RARITY_R)
+
+    def test_period_does_not_affect_rarity(self):
+        # 回归（项目诊断硬伤 1）: 时段只影响展示, 绝不能升档。
+        # 旧规则「仅早餐时段 → SSR」让早餐册 55 款 100% 限定, SSR 占全池 55%。
+        for periods in (None, {"breakfast"}, {"regular"}, {"regular", "breakfast"}):
+            self.assertEqual(
+                rarity_mod.classify("脆香油条", periods=periods),
+                rarity_mod.RARITY_SR)
+            self.assertEqual(
+                rarity_mod.classify("图林根香肠早安营养卷", periods=periods),
+                rarity_mod.RARITY_R)
+        self.assertEqual(
+            rarity_mod.classify("薯条", periods={"regular"}), rarity_mod.RARITY_SR)
         self.assertEqual(
             rarity_mod.classify("薯条", periods={"regular", "breakfast"}),
-            rarity_mod.RARITY_R)
+            rarity_mod.RARITY_SR)
 
     def test_sr_popular_tag(self):
         self.assertEqual(rarity_mod.classify("麦乐鸡", tags=["单品", "人气"]),
@@ -151,9 +158,24 @@ class TestClassify(unittest.TestCase):
         self.assertEqual(rarity_mod.classify("麦辣鸡腿汉堡", tags=["人气经典"]),
                          rarity_mod.RARITY_SR)
 
+    def test_sr_signature_exact_match(self):
+        # 招牌经典款按归一化名称精确匹配, 规格变体不升档
+        self.assertEqual(rarity_mod.classify("巨无霸"), rarity_mod.RARITY_SR)
+        self.assertEqual(rarity_mod.classify("双层吉士汉堡"), rarity_mod.RARITY_SR)
+        self.assertEqual(rarity_mod.classify("4块麦乐鸡"), rarity_mod.RARITY_R)
+        self.assertEqual(rarity_mod.classify("迷你草莓新地"), rarity_mod.RARITY_R)
+
     def test_r_default(self):
-        self.assertEqual(rarity_mod.classify("巨无霸", tags=["单品", "100%纯牛肉"]),
+        self.assertEqual(rarity_mod.classify("德式图林根香肠", tags=["小食"]),
                          rarity_mod.RARITY_R)
+        self.assertEqual(rarity_mod.classify("苹果片", tags=["小食"]),
+                         rarity_mod.RARITY_R)
+
+    def test_rank_helper(self):
+        self.assertLess(rarity_mod.rank_of("R"), rarity_mod.rank_of("SR"))
+        self.assertLess(rarity_mod.rank_of("SR"), rarity_mod.rank_of("SSR"))
+        self.assertLess(rarity_mod.rank_of("SSR"), rarity_mod.rank_of("UR"))
+        self.assertEqual(rarity_mod.rank_of("未知"), 0)
 
 
 class TestIsLimited(unittest.TestCase):
@@ -178,13 +200,28 @@ class TestBookOf(unittest.TestCase):
 
     def test_name_fallback(self):
         self.assertEqual(catalog_mod.book_of("圆筒冰淇淋"), "甜品册")
-        self.assertEqual(catalog_mod.book_of("香芋派"), "小食册")
+        # 派属于甜品柜台（回归: 曾按「薯条/薯饼」规则误归小食册）
+        self.assertEqual(catalog_mod.book_of("香芋派"), "甜品册")
         self.assertEqual(catalog_mod.book_of("优品豆浆"), "饮品册")
         self.assertEqual(catalog_mod.book_of("板烧鸡腿堡"), "汉堡册")
         self.assertEqual(catalog_mod.book_of("脆香油条"), "早餐册")
 
     def test_default_snack(self):
         self.assertEqual(catalog_mod.book_of("某个无法归类的餐品"), "小食册")
+
+    def test_combo_detection(self):
+        for name in ["板烧鸡腿堡三件套", "精选单人餐三件套", "全明星双人分享餐八件套",
+                     "人气经典随心配", "薯条八重奏", "“我就喜欢”鸡薯双全盒"]:
+            self.assertTrue(catalog_mod.combo_of(name), name)
+        for name in ["板烧鸡腿堡", "薯条", "脆香油条", "纯牛奶(盒装)", "巨无霸"]:
+            self.assertFalse(catalog_mod.combo_of(name), name)
+        # 分类是套餐专区时, 即使名字看不出也要拦掉
+        self.assertTrue(catalog_mod.combo_of("某件东西", category="精选单人餐"))
+
+    def test_merch_detection(self):
+        self.assertTrue(catalog_mod.is_merch("“葱不求人“按摩捶痒痒挠"))
+        self.assertTrue(catalog_mod.is_merch("薯条脆卜卜毛绒周边"))
+        self.assertFalse(catalog_mod.is_merch("薯条"))
 
 
 class TestCatalogMatching(unittest.TestCase):
@@ -247,18 +284,44 @@ class TestCatalogBuild(unittest.TestCase):
         self.assertEqual(set(cat.products["A1"]["tags"]), {"单品", "人气"})
 
     def test_duplicate_name_multiple_codes(self):
+        # 同名不同 code（真实数据里「派」「脆薯饼」都有两个编码）→ 合并成一格,
+        # 否则图鉴墙会出现两个一模一样的格子, 分母也虚高。
         cat = catalog_mod.Catalog()
         cat.absorb_menu(_menu_payload([("A1", "脆薯饼"), ("A2", "脆薯饼")]))
-        self.assertEqual(len(cat.name_index["脆薯饼"]), 2)
+        self.assertEqual(len(cat), 1)
+        self.assertEqual(len(cat.name_index["脆薯饼"]), 1)
+        merged = next(iter(cat.products.values()))
+        self.assertEqual(merged["merged_codes"], ["A2"])
+
+    def test_combo_excluded_from_pool(self):
+        cat = catalog_mod.Catalog()
+        cat.absorb_menu(_menu_payload([
+            ("B1", "板烧鸡腿堡"), ("B2", "板烧鸡腿堡三件套"),
+            ("B3", "人气经典随心配"), ("B4", "麦乐鸡泡泡机（小红帽款）"),
+        ]))
+        self.assertEqual(list(cat.products), ["B1"])
+        self.assertIn("板烧鸡腿堡三件套", cat.last_skipped_combos)
+        self.assertIn("麦乐鸡泡泡机（小红帽款）", cat.last_skipped_merch)
+
+    def test_all_combo_payload_rejected(self):
+        cat = catalog_mod.Catalog()
+        with self.assertRaises(catalog_mod.CatalogPayloadError):
+            cat.absorb_menu(_menu_payload([("C1", "麦乐鸡套餐")]))
+        self.assertEqual(len(cat), 0)
 
     def test_real_snapshot_pool(self):
         cat = catalog_mod.Catalog()
         cat.absorb_menu(_load_example("menu-regular.json"), period="regular")
         cat.absorb_menu(_load_example("menu-breakfast.json"), period="breakfast")
-        self.assertGreater(len(cat), 140)
+        # 单品池: 148 个 SKU 里 70+ 个是套餐/周边, 真正的单品 76 款
+        self.assertGreater(len(cat), 70)
+        self.assertLess(len(cat), 110)
         pool = cat.pool_by_book()
         for book in catalog_mod.BOOKS:
             self.assertIn(book, pool)
+        # 池内不得残留套餐
+        for entry in cat.products.values():
+            self.assertFalse(catalog_mod.combo_of(entry["name"]), entry["name"])
 
     def test_failed_or_empty_menu_response_is_rejected(self):
         cat = catalog_mod.Catalog()
@@ -304,6 +367,24 @@ class TestCatalogBuild(unittest.TestCase):
         cat = catalog_mod.Catalog()
         cat.absorb_menu(payload)
         self.assertTrue(cat.is_on_sale("A1", "薯条"))
+
+    def test_latest_snapshot_replaces_same_store_period(self):
+        cat = catalog_mod.Catalog()
+        cat.absorb_menu(_menu_payload([("OLD", "旧款堡"), ("KEEP", "薯条")]),
+                        period="regular", store="S1", fetched_at="2026-01-01")
+        cat.absorb_menu(_menu_payload([("KEEP", "薯条"), ("NEW", "新品堡")]),
+                        period="regular", store="S1", fetched_at="2026-02-01")
+        self.assertNotIn("OLD", cat.products)
+        self.assertIn("NEW", cat.products)
+        self.assertEqual(len(cat.sources), 1)
+
+    def test_different_store_snapshots_form_current_union(self):
+        cat = catalog_mod.Catalog()
+        cat.absorb_menu(_menu_payload([("A", "甲店限定")]), store="S1")
+        cat.absorb_menu(_menu_payload([("B", "乙店限定")]), store="S2")
+        self.assertEqual(set(cat.products), {"A", "B"})
+        cat.absorb_menu(_menu_payload([("C", "甲店新品")]), store="S1")
+        self.assertEqual(set(cat.products), {"B", "C"})
 
 
 # ===========================================================================
@@ -441,11 +522,41 @@ class TestReclassifyRevive(unittest.TestCase):
         key = "n:高达吉士双牛堡"
         self.assertEqual(store.items[key]["rarity"], "UR")
 
-        # 菜单池扩充, 该品回归
+        # 菜单池更新后该品回归，条目同时迁移到标准 catalog code。
         cat.absorb_menu(_menu_payload([("521316", "高达吉士双牛堡")]), period="regular")
         revived = store.reclassify(cat)
         self.assertIn("高达吉士双牛堡", revived)
-        self.assertEqual(store.items[key]["rarity"], rarity_mod.RARITY_SSR)
+        self.assertNotIn(key, store.items)
+        self.assertEqual(store.items["521316"]["rarity"], rarity_mod.RARITY_SSR)
+
+    def test_no_catalog_item_migrates_and_merges_without_duplication(self):
+        store = codex_mod.CodexStore()
+        store.absorb_order(_order("M1", "订单已完成",
+                                  [("501205", "中薯条", 2, None)]), None)
+        self.assertIn("n:薯条", store.items)
+        cat = catalog_mod.Catalog()
+        cat.absorb_menu(_menu_payload([("4810", "薯条")]), store="S1")
+        store.reclassify(cat)
+        self.assertEqual(set(store.items), {"4810"})
+        store.absorb_order(_order("M2", "订单已完成",
+                                  [("4810", "薯条", 1, None)]), cat)
+        self.assertEqual(set(store.items), {"4810"})
+        self.assertEqual(store.items["4810"]["count"], 3)
+
+    def test_reclassify_merges_existing_standard_and_temporary_keys(self):
+        store = codex_mod.CodexStore()
+        cat = catalog_mod.Catalog()
+        cat.absorb_menu(_menu_payload([("4810", "薯条")]), store="S1")
+        store.absorb_order(_order("M3", "订单已完成", [("4810", "薯条", 1, None)]), cat)
+        store.items["n:薯条"] = {
+            "name": "中薯条", "book": "小食册", "rarity": "R",
+            "first_unlock": "2025-01-01 10:00:00", "store": "旧店",
+            "count": 2, "image": "", "catalog_code": "",
+        }
+        store.reclassify(cat)
+        self.assertEqual(set(store.items), {"4810"})
+        self.assertEqual(store.items["4810"]["count"], 3)
+        self.assertEqual(store.items["4810"]["first_unlock"], "2025-01-01 10:00:00")
 
 
 class TestStats(unittest.TestCase):
@@ -548,6 +659,35 @@ class TestRender(unittest.TestCase):
         md = render_mod.render_markdown(self.store, None)
         self.assertIn("麦麦图鉴", md)
 
+    def test_share_card_escapes_dynamic_text(self):
+        store = codex_mod.CodexStore()
+        store.items["x"] = {
+            "name": '<script>alert("x")</script>', "book": "小食册", "rarity": "UR",
+            "first_unlock": "2026-01-01 00:00:00", "store": "S", "count": 1,
+            "image": "", "catalog_code": "",
+        }
+        out = os.path.join(tempfile.gettempdir(), "mcd-test-escape-card.html")
+        render_mod.render_share_card(store, None, None, out)
+        with open(out, "r", encoding="utf-8") as f:
+            html = f.read()
+        self.assertNotIn('<script>alert("x")</script>', html)
+        self.assertIn("&lt;script&gt;", html)
+        os.remove(out)
+
+    def test_markdown_progress_is_capped_at_100(self):
+        store = codex_mod.CodexStore()
+        cat = catalog_mod.Catalog()
+        cat.absorb_menu(_menu_payload([("A", "薯条")]), store="S1")
+        for i in range(2):
+            store.items["x%d" % i] = {
+                "name": "小食%d" % i, "book": "小食册", "rarity": "UR",
+                "first_unlock": "2026-01-01 00:00:00", "store": "S", "count": 1,
+                "image": "", "catalog_code": "",
+            }
+        md = render_mod.render_markdown(store, cat)
+        self.assertIn("100%", md)
+        self.assertNotIn("200%", md)
+
 
 # ===========================================================================
 # 5. CLI 集成 — 子命令端到端
@@ -576,7 +716,8 @@ class TestCli(unittest.TestCase):
         r1 = self._run(["absorb-menu", "--menu",
                         os.path.join(EXAMPLES, "menu-regular.json"),
                         "--catalog", self.cat, "--period", "regular"])
-        self.assertGreater(r1["pool_size"], 50)
+        self.assertGreater(r1["pool_size"], 40)
+        self.assertGreater(r1["skipped_combos"], 0)
         self._run(["absorb-menu", "--menu",
                    os.path.join(EXAMPLES, "menu-breakfast.json"),
                    "--catalog", self.cat, "--period", "breakfast"])
@@ -606,11 +747,14 @@ class TestCli(unittest.TestCase):
                    "--codex", self.cdx, "--catalog", self.cat])
         md = os.path.join(self.tmp, "out", "codex.md")
         card = os.path.join(self.tmp, "out", "card.html")
+        wall = os.path.join(self.tmp, "out", "codex-wall.html")
         # 不传 --template, 验证默认模板回落（skill 从任意 cwd 运行的场景）
         r = self._run(["render", "--codex", self.cdx, "--catalog", self.cat,
-                       "--out-md", md, "--out-card", card])
+                       "--out-md", md, "--out-card", card, "--out-wall", wall])
         self.assertTrue(os.path.exists(md) and os.path.exists(card))
-        self.assertEqual(set(r["outputs"]), {"markdown", "share_card"})
+        self.assertTrue(os.path.exists(wall))
+        self.assertEqual(set(r["outputs"]),
+                         {"markdown", "share_card", "codex_wall"})
 
     def test_stats_on_missing_codex(self):
         # 首次运行: codex 不存在 → 空图鉴, 不报错
@@ -682,7 +826,7 @@ class TestCli(unittest.TestCase):
         self.assertEqual(self.last_exit_code, 0)
         cat = catalog_mod.Catalog.load(self.cat)
         self.assertEqual({s["period"] for s in cat.sources}, {"regular", "breakfast"})
-        self.assertEqual(len(cat), 148)
+        self.assertEqual(len(cat), 76)
 
     def test_default_paths_rooted_at_project_root(self):
         # 回归 P2: CLI 默认路径锚定脚本上级目录, 而非 cwd
@@ -763,18 +907,258 @@ class TestRealDataRegression(unittest.TestCase):
 
     def test_stats_sane(self):
         self.assertEqual(self.stats["unlocked"], len(self.store.items))
-        self.assertGreater(self.stats["pool_total"], 140)
+        self.assertGreater(self.stats["pool_total"], 70)
         self.assertGreaterEqual(self.stats["ur_count"], 2)
         self.assertEqual(self.stats["store_count"], 5)
         self.assertIn("💎 绝版猎人", self.stats["badges"])
         self.assertIsNotNone(self.stats["favorite"])
         self.assertEqual(self.stats["treasure"]["rarity"], "UR")
+        self.assertEqual(self.stats["completion"],
+                         int(round(self.stats["unlocked"] * 100 /
+                                   self.stats["pool_total"])))
 
     def test_resync_stability(self):
         before = len(self.store.items)
         for order in self.orders:
             self.store.absorb_order(order, self.cat)
         self.assertEqual(len(self.store.items), before)
+
+
+# ===========================================================================
+# 7. 稀有度分布 — 收集玩法的地基（越稀有越少）
+# ===========================================================================
+class TestRarityBalance(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cat = catalog_mod.Catalog()
+        cat.absorb_menu(_load_example("menu-regular.json"), period="regular")
+        cat.absorb_menu(_load_example("menu-breakfast.json"), period="breakfast")
+        cls.cat = cat
+        cls.pool = cat.pool_by_book()
+
+    def test_gradient_is_monotonic(self):
+        """R 最多, SR 次之, SSR 最少 —— 一旦倒挂, 「稀有」就失去意义。"""
+        counts = {r: 0 for r in ("R", "SR", "SSR")}
+        for entry in self.cat.products.values():
+            counts[entry["rarity"]] = counts.get(entry["rarity"], 0) + 1
+        self.assertGreater(counts["R"], counts["SR"], counts)
+        self.assertGreater(counts["SR"], counts["SSR"], counts)
+
+    def test_ssr_ratio_in_range(self):
+        # 诊断要求: SSR 回落到 10%~15%（旧规则是 55%）
+        total = len(self.cat)
+        ssr = sum(1 for e in self.cat.products.values() if e["rarity"] == "SSR")
+        ratio = ssr / float(total)
+        self.assertGreaterEqual(ratio, 0.04)
+        self.assertLessEqual(ratio, 0.18)
+
+    def test_sr_ratio_in_range(self):
+        total = len(self.cat)
+        sr = sum(1 for e in self.cat.products.values() if e["rarity"] == "SR")
+        ratio = sr / float(total)
+        self.assertGreaterEqual(ratio, 0.15)
+        self.assertLessEqual(ratio, 0.32)
+
+    def test_breakfast_book_is_not_all_limited(self):
+        # 回归（硬伤 1）: 早餐册曾 100% 是「限定款金色」
+        breakfast = self.pool[catalog_mod.BOOK_BREAKFAST]
+        self.assertGreater(len(breakfast), 10)
+        ssr = sum(1 for e in breakfast.values() if e["rarity"] == "SSR")
+        self.assertLessEqual(ssr / float(len(breakfast)), 0.2)
+
+    def test_no_book_is_dominated_by_ssr(self):
+        # 限定册按定义全是限定款, 不参与这条检查
+        for book, entries in self.pool.items():
+            if not entries or book == catalog_mod.BOOK_LIMITED:
+                continue
+            ssr = sum(1 for e in entries.values() if e["rarity"] == "SSR")
+            self.assertLess(ssr / float(len(entries)), 0.4, book)
+
+    def test_single_item_pool_has_no_combo(self):
+        for entry in self.cat.products.values():
+            self.assertFalse(catalog_mod.combo_of(entry["name"]), entry["name"])
+
+
+# ===========================================================================
+# 8. 图鉴格子墙 — 核心视觉交付物
+# ===========================================================================
+class TestCodexWall(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.store = codex_mod.CodexStore()
+        cls.cat = catalog_mod.Catalog()
+        cls.cat.absorb_menu(_load_example("menu-regular.json"), period="regular")
+        cls.cat.absorb_menu(_load_example("menu-breakfast.json"), period="breakfast")
+        for order in codex_mod.extract_orders(_load_example("order-list.json")):
+            cls.store.absorb_order(order, cls.cat)
+        cls.store.reclassify(cls.cat)
+        cls.tmp = tempfile.mkdtemp(prefix="mcd-wall-")
+        cls.path = os.path.join(cls.tmp, "wall.html")
+        render_mod.render_codex_wall(cls.store, cls.cat, None, cls.path)
+        with open(cls.path, "r", encoding="utf-8") as f:
+            cls.html = f.read()
+
+    @classmethod
+    def tearDownClass(cls):
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def test_placeholders_replaced(self):
+        self.assertNotIn("{{", self.html)
+
+    def test_every_pool_item_gets_a_cell(self):
+        self.assertEqual(self.html.count("<figure class=\"cell"),
+                         len(self.cat))
+
+    def test_lit_and_locked_partition_the_pool(self):
+        lit = self.html.count("class=\"cell lit")
+        locked = self.html.count("class=\"cell locked")
+        self.assertEqual(lit + locked, len(self.cat))
+        self.assertGreaterEqual(lit, 10)
+
+    def test_locked_cells_show_silhouette_and_question_marks(self):
+        self.assertIn("???", self.html)
+        self.assertIn('class="sil"', self.html)   # 剪影用的官方图
+        self.assertNotIn("??？", self.html)       # 旧版半角+全角混排 bug
+
+    def test_products_have_real_images(self):
+        self.assertIn("https://menu-img.mcd.cn", self.html)
+        self.assertIn('<img class="pic"', self.html)
+
+    def test_ur_hall_rendered(self):
+        self.assertIn("绝版殿堂", self.html)
+        self.assertIn("绝版款", self.html)
+        self.assertEqual(self.html.count('class="ur-card"'), len(
+            [i for i in self.store.items.values() if i["rarity"] == "UR"]))
+
+    def test_book_sections_and_nav(self):
+        for book in catalog_mod.BOOKS:
+            self.assertIn(book, self.html)
+        self.assertEqual(self.html.count("<section class=\"book\""),
+                         len(catalog_mod.BOOKS))
+
+    def test_wall_escapes_dynamic_text(self):
+        store = codex_mod.CodexStore()
+        store.items["x"] = {
+            "name": '<img src=x onerror=alert(1)>', "book": "汉堡册",
+            "rarity": "SSR", "first_unlock": "2026-01-01 00:00:00",
+            "store": "S", "count": 1,
+            "image": "javascript:alert(1)", "catalog_code": "",
+        }
+        cat = catalog_mod.Catalog()
+        cat.absorb_menu(_menu_payload([("X", "某堡")]), store="S1")
+        out = os.path.join(self.tmp, "escape-wall.html")
+        render_mod.render_codex_wall(store, cat, None, out)
+        with open(out, "r", encoding="utf-8") as f:
+            html = f.read()
+        self.assertNotIn("onerror=alert(1)", html)
+        self.assertNotIn("javascript:alert(1)", html)
+
+
+# ===========================================================================
+# 9. Markdown 图鉴 — 进度条与图片
+# ===========================================================================
+class TestMarkdownVisual(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.store = codex_mod.CodexStore()
+        cls.cat = catalog_mod.Catalog()
+        cls.cat.absorb_menu(_load_example("menu-regular.json"), period="regular")
+        cls.cat.absorb_menu(_load_example("menu-breakfast.json"), period="breakfast")
+        for order in codex_mod.extract_orders(_load_example("order-list.json")):
+            cls.store.absorb_order(order, cls.cat)
+        cls.store.reclassify(cls.cat)
+        cls.md = render_mod.render_markdown(cls.store, cls.cat)
+
+    def test_no_mixed_question_marks(self):
+        self.assertNotIn("??？", self.md)
+        self.assertIn("???", self.md)
+
+    def test_header_spacing(self):
+        # 旧版是「已点亮 **13** 款/ 148 款」—— 斜杠前后缺空格
+        self.assertNotIn("款/", self.md)
+        self.assertIn(" / ", self.md)
+
+    def test_lit_items_render_as_images(self):
+        self.assertIn("<img src=\"https://menu-img.mcd.cn", self.md)
+        self.assertIn("width=\"96\"", self.md)
+
+    def test_progress_bar_has_granularity(self):
+        # 旧版 progress//10 会让 5% 显示为空、15% 只有 1 格
+        self.assertTrue(any(ch in render_mod._bar(5) for ch in "▏▎▍▌▋▊▉█"))
+        self.assertEqual(render_mod._bar(0).count("░"), 10)
+        self.assertEqual(render_mod._bar(100).count("█"), 10)
+        self.assertEqual(render_mod._bar(150).count("█"), 10)
+
+    def test_ur_section(self):
+        self.assertIn("绝版殿堂", self.md)
+        self.assertIn("培根蔬萃双层牛堡", self.md)
+
+
+# ===========================================================================
+# 10. 绝版补图 / 离线 Demo
+# ===========================================================================
+class TestImageBackfill(unittest.TestCase):
+    def test_probe_hit_fills_image(self):
+        cat = catalog_mod.Catalog()
+        cat.absorb_menu(_menu_payload([("1406", "板烧鸡腿堡")]), store="S1")
+        store = codex_mod.CodexStore()
+        order = _order("O-1", "订单已完成", [
+            ("521879", "泰式炭烤风味猪猪堡", 1, None)])
+        store.absorb_order(order, cat, probe=lambda url: "MS_521879_320.png" in url)
+        item = next(iter(store.items.values()))
+        self.assertEqual(item["rarity"], "UR")
+        self.assertEqual(item["image"],
+                         codex_mod.IMAGE_URL_TEMPLATE.format(code="521879"))
+
+    def test_probe_miss_keeps_image_empty(self):
+        cat = catalog_mod.Catalog()
+        cat.absorb_menu(_menu_payload([("1406", "板烧鸡腿堡")]), store="S1")
+        store = codex_mod.CodexStore()
+        order = _order("O-2", "订单已完成", [("521879", "泰式炭烤风味猪猪堡", 1, None)])
+        store.absorb_order(order, cat, probe=lambda url: False)
+        self.assertEqual(next(iter(store.items.values()))["image"], "")
+
+    def test_no_probe_means_no_network(self):
+        cat = catalog_mod.Catalog()
+        cat.absorb_menu(_menu_payload([("1406", "板烧鸡腿堡")]), store="S1")
+        store = codex_mod.CodexStore()
+        order = _order("O-3", "订单已完成", [("521879", "泰式炭烤风味猪猪堡", 1, None)])
+        store.absorb_order(order, cat)
+        self.assertEqual(next(iter(store.items.values()))["image"], "")
+
+
+class TestOfflineDemo(unittest.TestCase):
+    def test_demo_builds_all_artifacts(self):
+        import demo as demo_mod
+        tmp = tempfile.mkdtemp(prefix="mcd-demo-")
+        try:
+            stats, paths = demo_mod.build(tmp, examples_dir=EXAMPLES, quiet=True)
+            for kind in ("catalog", "codex", "markdown", "card", "wall"):
+                self.assertTrue(os.path.exists(paths[kind]), kind)
+            self.assertGreater(stats["pool_total"], 70)
+            self.assertEqual(stats["ur_count"], 2)
+            with open(paths["wall"], "r", encoding="utf-8") as f:
+                self.assertNotIn("{{", f.read())
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
+# ===========================================================================
+# 11. 统计口径
+# ===========================================================================
+class TestStatsExtras(unittest.TestCase):
+    def test_pool_mix_and_completion(self):
+        cat = catalog_mod.Catalog()
+        cat.absorb_menu(_menu_payload([("A", "薯条"), ("B", "苹果片")]), store="S1")
+        store = codex_mod.CodexStore()
+        order = _order("O-9", "订单已完成", [("A", "薯条", 1, None)])
+        store.absorb_order(order, cat)
+        stats = store.stats(cat)
+        self.assertEqual(stats["pool_by_rarity"]["SR"], 1)   # 薯条 = 招牌款
+        self.assertEqual(stats["pool_by_rarity"]["R"], 1)    # 苹果片 = 常规款
+        self.assertEqual(stats["completion"], 50)
+        self.assertEqual(stats["mine_by_rarity"]["SR"], 1)
+        self.assertEqual(stats["sr_count"], 1)
 
 
 if __name__ == "__main__":

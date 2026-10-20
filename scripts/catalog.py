@@ -51,15 +51,62 @@ _CATEGORY_BOOK_RULES = [
 
 # 名称关键词 → 册别（分类缺失/不明时兜底; 顺序即优先级）
 _NAME_BOOK_RULES = [
-    (r"冰淇淋|麦旋风|新地|圆筒|甜筒|阿芙佳朵", BOOK_DESSERT),
+    # 派/圣代/新地都是甜品柜台的常客, 必须排在「小食」之前
+    (r"冰淇淋|麦旋风|新地|圆筒|甜筒|阿芙佳朵|圣代|派$|蛋糕|布丁|冰棒", BOOK_DESSERT),
     (r"咖啡|奶茶|豆浆|可乐|雪碧|红茶|绿茶|牛奶|纯悦|苹果汁|橙橙|柠柠|燕麦奶|黑巧|奶铁|美式|卡布奇诺|奶昔|柠檬茶|锡兰",
      BOOK_DRINK),
     (r"麦满分|油条|粥|早餐|早安|炒双蛋|厚松饼", BOOK_BREAKFAST),
     (r"堡$|汉堡|巨无霸|卷$", BOOK_BURGER),
-    (r"薯条|薯饼|麦乐鸡|鸡翅|鸡块|玉米杯|苹果片|派$|拼盘|酱$|香肠|炸鸡|大四角",
+    (r"薯条|薯饼|麦乐鸡|鸡翅|鸡块|玉米杯|苹果片|拼盘|酱$|香肠|炸鸡|大四角",
      BOOK_SNACK),
     (r"周边|泡泡机|玩具|挠痒|捶痒", BOOK_SNACK),
 ]
+
+# ---------------------------------------------------------------------------
+# 套餐 / 组合识别
+# ---------------------------------------------------------------------------
+# 图鉴的原子单位是**单品**（codex.py: 组合餐展开到子项收录）。
+# 若把套餐也放进图鉴池, 会出现三个问题:
+#   1. 分母虚高（真实菜单 148 项里 60+ 是各种 N 件套）, 进度永远上不去;
+#   2. 同一个汉堡既算「单品」又算「套餐」, 一格餐品占两格图鉴;
+#   3. 早餐池被「二件套/三件套」塞满, 整册权重彻底失衡。
+# 因此池内只保留单品级餐品, 套餐在采样时被显式跳过（并在 CLI 里报数）。
+COMBO_TAGS = {"套餐", "二件套", "三件套", "四件套", "五件套", "六件套", "八件套",
+              "组合", "小食拼盘", "随心配"}
+_COMBO_NAME_RE = re.compile(
+    r"(套餐|组合|件套|双人餐|单人餐|三人餐|四人餐|分享餐|随心选|随心配|任选"
+    r"|拼盘|宫格|十翅|重奏|乐园餐|自选|双全盒|盒$)")
+_COMBO_CATEGORIES = {"精选单人餐", "500大卡套餐", "随心配1+1", "小食拼盘/多人餐", "开心乐园"}
+
+# 周边 / 玩具类（泡泡机、毛绒、按摩捶…）不是餐品, 不进餐品图鉴。
+# 若不拦掉, 它们会以「上新」标签混进小食册并抢到 SSR, 让图鉴看起来像个杂货铺。
+_MERCH_RE = re.compile(r"(周边|泡泡机|玩具|公仔|毛绒|按摩捶|捶痒|挠痒|挂件|徽章|贴纸|抱枕)")
+
+
+def is_merch(name):
+    """是否周边/玩具类商品（非餐品, 不进入图鉴池）。"""
+    return bool(_MERCH_RE.search(name or ""))
+
+
+def combo_of(name, tags=None, category=None):
+    """判定是否为套餐/组合形态（用于把套餐挡在图鉴池之外）。
+
+    命中任一条件即视为套餐:
+        * 名称含「套餐 / 组合 / N 件套 / 单人餐 / 随心配 …」
+        * 菜单标签含「套餐 / 二件套 / 三件套 …」
+        * 菜单分类是套餐专区（精选单人餐 / 500大卡套餐 / 随心配1+1 …）
+
+    >>> combo_of("板烧鸡腿堡三件套")
+    True
+    >>> combo_of("板烧鸡腿堡")
+    False
+    """
+    tags = tags or []
+    if any(t in COMBO_TAGS for t in tags):
+        return True
+    if category and category.replace("\n", "") in _COMBO_CATEGORIES:
+        return True
+    return bool(_COMBO_NAME_RE.search(name or ""))
 
 
 def book_of(name, category=None):
@@ -93,7 +140,13 @@ class Catalog:
         data = data or {}
         self.products = data.get("products", {})
         self.sources = data.get("sources", [])
+        # 每个「门店 + 时段」只保留最近一次成功快照；products 是其当前并集。
+        # 旧版文件没有 snapshots，首次成功更新后会自动迁移到快照模型。
+        self.snapshots = data.get("snapshots", {})
         self.updated_at = data.get("updated_at", "")
+        self.last_skipped_combos = []
+        self.last_skipped_merch = []
+        self.last_skipped_unknown = []
         self._rebuild_name_index()
 
     # -- 构建 ------------------------------------------------------------
@@ -109,11 +162,10 @@ class Catalog:
         payload = {
             "updated_at": self.updated_at,
             "sources": self.sources,
+            "snapshots": self.snapshots,
             "products": self.products,
         }
-        os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
+        _atomic_dump_json(path, payload)
 
     def absorb_menu(self, menu_payload, period="regular", store="", fetched_at=None):
         """合并一份 query-meals 响应进图鉴池。
@@ -172,47 +224,85 @@ class Catalog:
         if menu_count == 0:
             raise CatalogPayloadError("query-meals 响应不含可用餐品，已跳过图鉴池更新")
 
-        added, updated = 0, 0
+        previous_codes = set(self.products)
+        snapshot_products = {}
+        skipped_combos = []
+        skipped_merch = []
+        skipped_unknown = []
         for cat in categories:
             cat_name = (cat.get("name") or "").replace("\n", "")
             for meal in cat.get("meals") or []:
                 code = str(meal.get("code") or "")
-                if not code:
-                    continue
                 tags = meal.get("tags") or []
                 info = meals_map.get(code) or {}
                 name = info.get("name") or str(meal.get("name") or code)
-                entry = self.products.get(code)
-                if entry is None:
-                    entry = {
-                        "name": name,
-                        "image": info.get("image") or "",
-                        "tags": sorted(set(tags)),
-                        "category": cat_name,
-                        "book": book_of(name, cat_name),
-                        "periods": [],
-                        "price": info.get("currentPrice") or "",
-                    }
-                    self.products[code] = entry
-                    added += 1
-                else:
-                    # 合并 tags / 时段 / 图片（后到的信息补充先到的）
-                    entry["tags"] = sorted(set(entry["tags"]) | set(tags))
-                    if info.get("image"):
-                        entry["image"] = entry["image"] or info["image"]
-                    updated += 1
-                if period not in entry["periods"]:
-                    entry["periods"].append(period)
+                # 只有编码没有名称（详情缺失）的条目无法成为图鉴一格
+                if not name.strip() or name.strip() == code:
+                    skipped_unknown.append(code)
+                    continue
+                # 图鉴只收集单品: 套餐/组合会被展开成单品后收录, 池内不再重复计数
+                if combo_of(name, tags, cat_name):
+                    skipped_combos.append(name)
+                    continue
+                if is_merch(name):
+                    skipped_merch.append(name)
+                    continue
+                snapshot_products[code] = {
+                    "name": name,
+                    "image": info.get("image") or "",
+                    "tags": sorted(set(tags)),
+                    "category": cat_name,
+                    "book": book_of(name, cat_name),
+                    "periods": [period],
+                    "price": info.get("currentPrice") or "",
+                }
+        # 一份「全是套餐」的响应无法支撑单品图鉴, 视为无效快照（不改动现有池）
+        if not snapshot_products:
+            raise CatalogPayloadError("query-meals 响应不含任何单品餐品，已跳过图鉴池更新")
+        self.last_skipped_combos += skipped_combos
+        self.last_skipped_merch += skipped_merch
+        self.last_skipped_unknown += skipped_unknown
 
-        self.sources.append({
+        fetched_at = fetched_at or _now()
+        source_key = "%s::%s" % (str(store), period)
+        self.snapshots[source_key] = {
             "store": str(store),
             "period": period,
-            "fetched_at": fetched_at or _now(),
-        })
-        # 全量重判稀有度（UR 复活机制: 新采样时段可能把 UR 拉回在售）
+            "fetched_at": fetched_at,
+            "products": snapshot_products,
+        }
+        # 同一门店与时段替换旧快照；不同门店/时段取当前快照并集。
+        self._rebuild_products_from_snapshots()
+        self.sources = [
+            {"store": snap["store"], "period": snap["period"],
+             "fetched_at": snap["fetched_at"]}
+            for snap in self.snapshots.values()
+        ]
+        current_codes = set(self.products)
+        added = len(current_codes - previous_codes)
+        updated = len(current_codes & previous_codes)
+        return added, updated
+
+    def _rebuild_products_from_snapshots(self):
+        """由各来源的最新成功快照重建当前菜单池。"""
+        products = {}
+        for snap in self.snapshots.values():
+            for code, incoming in snap.get("products", {}).items():
+                if code not in products:
+                    products[code] = dict(incoming)
+                    products[code]["tags"] = list(incoming.get("tags") or [])
+                    products[code]["periods"] = list(incoming.get("periods") or [])
+                    continue
+                entry = products[code]
+                entry["tags"] = sorted(set(entry.get("tags") or []) |
+                                       set(incoming.get("tags") or []))
+                entry["periods"] = sorted(set(entry.get("periods") or []) |
+                                          set(incoming.get("periods") or []))
+                if not entry.get("image") and incoming.get("image"):
+                    entry["image"] = incoming["image"]
+        self.products = _merge_duplicate_names(products)
         self.reclassify()
         self._rebuild_name_index()
-        return added, updated
 
     def reclassify(self):
         """对池内所有产品重新判定稀有度。"""
@@ -265,6 +355,55 @@ class Catalog:
 
     def __len__(self):
         return len(self.products)
+
+
+def _merge_duplicate_names(products):
+    """同名餐品合并为一格。
+
+    真实菜单里同一个餐品常有多个菜单 code（例如「派」同时以 4106 与
+    9900015165、「脆薯饼」以 4825 与 521741 出现在同一次响应里）。
+    若不合并, 图鉴墙会出现两个一模一样的格子, 分母也虚高。
+    合并时保留信息最全的那条（有图 > 有价 > 编码靠前）, 时段与标签取并集。
+    """
+    def score(entry):
+        return (1 if entry.get("image") else 0) + (1 if entry.get("price") else 0)
+
+    result = {}
+    index = {}
+    for code, entry in sorted(products.items(), key=lambda kv: -score(kv[1])):
+        key = rarity.normalize_name(entry.get("name") or "")
+        if not key:
+            result[code] = entry
+            continue
+        if key not in index:
+            index[key] = code
+            result[code] = entry
+            continue
+        keep = result[index[key]]
+        keep["tags"] = sorted(set(keep.get("tags") or []) |
+                              set(entry.get("tags") or []))
+        keep["periods"] = sorted(set(keep.get("periods") or []) |
+                                 set(entry.get("periods") or []))
+        for field in ("image", "price", "category", "book"):
+            if not keep.get(field) and entry.get(field):
+                keep[field] = entry[field]
+        keep.setdefault("merged_codes", []).append(code)
+    return result
+
+
+def _atomic_dump_json(path, payload):
+    """原子保存图鉴池，避免写入中断损坏现有文件。"""
+    os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
+    temp_path = path + ".tmp"
+    try:
+        with open(temp_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temp_path, path)
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
 
 
 def _now():

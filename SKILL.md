@@ -26,10 +26,12 @@ Skill 根目录（本 SKILL.md 所在目录）：
 | 路径 | 用途 |
 |---|---|
 | `scripts/codex.py` | 收录引擎 CLI（absorb-menu / absorb-order / sync / stats / render） |
+| `scripts/demo.py` | 零 Token 离线演示（用 `examples/` 快照一键出图） |
 | `data/codex.json` | **用户个人图鉴状态**（自动生成，含个人数据，勿外传） |
 | `data/catalog.json` | 图鉴池（多时段菜单合集，自动生成） |
 | `data/snapshots/*.json` | MCP 响应快照（调用工具后先存这里，再交给 CLI） |
-| `output/codex.md` | 渲染出的图鉴（Markdown） |
+| `output/codex-wall.html` | **图鉴格子墙**（主视觉，优先展示） |
+| `output/codex.md` | 渲染出的图鉴（Markdown，GitHub 可视） |
 | `output/share-card.html` | 图鉴分享卡（HTML，用于晒图） |
 
 运行 Python：优先用户环境中的 Python 3.8+；CLI 仅用标准库，无需安装依赖。
@@ -79,16 +81,18 @@ python "<Skill根目录>/scripts/codex.py" stats
 
 ### 流程 B · 下单收录（主动收录，100% 可靠）
 
-1. 按用户需求走正常点单（选门店 → 查菜单 → 算价 → 下单 → 支付确认）
-2. `query-order` 确认订单状态**非取消**后，把订单详情 JSON 保存到
-   `data/snapshots/order-{orderId}.json`
+1. 按用户需求选门店、查菜单并算价；在调用 `create-order` 前，必须向用户展示
+   **门店、商品、数量和应付金额**，并获得对本次订单的明确确认。查看或点亮图鉴不构成下单授权。
+2. 创建订单后调用 `query-order`。只有状态明确属于**已支付/制作中/已完成**等成功状态时，
+   才把订单详情保存到 `data/snapshots/order-{orderId}.json`；待支付、支付失败、已关闭、
+   已取消或无法判断的状态均不得收录。
 3. 执行：
    ```bash
    python scripts/codex.py absorb-order \
      --order data/snapshots/order-{orderId}.json \
      --codex data/codex.json --catalog data/catalog.json
    ```
-4. 播报新点亮条目；订单若取消则不收录（CLI 自动跳过）
+4. 播报新点亮条目；CLI 会兜底跳过含“取消”的订单，但 Skill 层仍须执行上述成功状态白名单判断
 
 ### 流程 C · 更新图鉴池（菜单采样 + 绝版检测）
 
@@ -105,30 +109,47 @@ python "<Skill根目录>/scripts/codex.py" stats
      --catalog data/catalog.json --period regular --store {storeCode}
    ```
    只有常规和早餐快照都通过校验时才会写入图鉴池；任一失败都会保留旧池。
+   同一门店同一时段的新快照会替换旧快照；不同门店/时段取各自最新快照的并集，
+   因此已从所有当前快照消失的餐品可被重新判为 UR，而不会永久残留为在售。
 5. 再跑一次流程 A 的 sync，稀有度与绝版状态会自动重判
 
 ### 流程 D · 展示与分享
 
 ```bash
 python scripts/codex.py render --codex data/codex.json \
-  --catalog data/catalog.json --out-md output/codex.md --out-card output/share-card.html
+  --catalog data/catalog.json \
+  --out-wall output/codex-wall.html \
+  --out-md output/codex.md --out-card output/share-card.html
 ```
 
+- **优先用文件卡片展示 `output/codex-wall.html`** —— 这是「图鉴」本体：
+  六册格子墙，点亮格是官方产品图，未点亮格是灰度剪影 + `???`，绝版款进「绝版殿堂」。
 - 向用户复述 `output/codex.md` 的核心内容（等级称号、各册进度、最爱与绝版收藏）
 - 差 1-3 款集齐某册时，高亮提示「再点亮 X 款就集齐 XX 册了！」
 - 用户想晒图时，用文件卡片展示 `output/share-card.html`
+- 没有 MCP Token / 想先给用户看效果时，直接跑 `python scripts/demo.py --open`
 
 ## 稀有度体系（判定由 rarity.py 自动完成）
 
-| 等级 | 含义 |
-|---|---|
-| R 常规款 | 常年菜单在售 |
-| SR 人气款 | 菜单标签含「人气」 |
-| SSR 限定款 | 联名/限定关键词（高达、世界波、泷…），或仅早餐时段供应 |
-| UR 绝版款 | 历史吃过、当前菜单池已下架 —— 时代眼泪，最重的炫耀资本 |
+| 等级 | 含义 | 判定 |
+|---|---|---|
+| R 常规款 | 常规在售单品 | 其余全部 |
+| SR 人气款 | 招牌经典款 | 精确名单（巨无霸/薯条/麦乐鸡…）或菜单「人气」标签 |
+| SSR 限定款 | 联名 / 主题 / 当季上新 | 名称含联名限定词，或标签含「上新 / 限定」 |
+| UR 绝版款 | 历史吃过、当前菜单池已下架 | 不在合并菜单池内 |
 
-**注意**：UR 判定依赖已采样菜单池，会随采样扩充自动修正（复活机制）。
-在售匹配是三通道（code 精确 → 名称归一化 → 弱匹配），请勿手工改判。
+**注意**：
+- **供应时段不参与稀有度**。早餐品只在早餐菜单出现，这是常态而不是「限定」——
+  早期版本把它判成 SSR，结果早餐册 100% 变金色、SSR 占全池 55%，梯度失效。
+- 「限定特惠」是打折标签，不是限定商品，已排除。
+- 池内分布应满足 **R > SR > SSR**（实测 48 / 20 / 8）；倒挂说明判定逻辑被改坏了，
+  `tests/test_codex.py::TestRarityBalance` 会拦住。
+- **图鉴池只收单品**：套餐/组合/周边在采样时被跳过（`skipped_combos`），
+  因为收录的原子单位是订单子项（单品级）。
+- UR 判定依赖已采样菜单池，会随采样扩充自动修正（复活机制）。
+  在售匹配是三通道（code 精确 → 名称归一化 → 弱匹配），请勿手工改判。
+- UR 通常没有菜单图（已下架）。需要图时给 `sync` 加 `--probe-images`，
+  CLI 会按商品编码回查官方图 CDN 并做 HEAD 校验，校验不过就不写入。
 
 ## 边界与合规
 

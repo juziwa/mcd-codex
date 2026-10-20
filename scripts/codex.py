@@ -40,6 +40,26 @@ import rarity as rarity_mod  # noqa: E402
 SCHEMA_VERSION = 1
 CANCELLED_KEYWORD = "取消"
 
+# 官方商品图路径模板（按商品编码推导）。
+# 订单侧商品的图片字段常常为空, 尤其是**已下架的绝版款** —— 它们不在当前菜单里,
+# 自然也就没有菜单图。实测 menu-img CDN 的商品图按编码命名可以命中历史商品
+# （如 1106 → 培根蔬萃双层牛堡）, 因此 URL 有缺失时按模板补一次, 并用
+# HEAD 请求校验（--probe-images）, 校验不过就不写, 避免交付物里出现坏图。
+IMAGE_URL_TEMPLATE = ("https://menu-img.mcd.cn/pcm/prod/menu/ProductPool/"
+                      "product/MS_{code}_320.png")
+
+
+def probe_image(url, timeout=5):
+    """轻量校验图片地址是否可用（失败一律返回 False, 不抛异常）。"""
+    try:
+        import urllib.request
+        req = urllib.request.Request(url, method="HEAD",
+                                     headers={"User-Agent": "mcd-codex/1.0"})
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return 200 <= resp.status < 400
+    except Exception:  # noqa: BLE001 — 任何网络/证书/超时问题都视作不可用
+        return False
+
 # 仓库/Skill 根目录（scripts/ 的上级）。
 # 所有 CLI 默认路径锚定此目录而非 cwd, 保证从任意工作目录执行都可用。
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -118,16 +138,15 @@ class CodexStore:
             "stores": self.stores,
             "orders_seen": self.orders_seen,
         }
-        _ensure_parent(path)
-        with open(path, "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
+        _atomic_dump_json(path, payload)
 
     # -- 收录 --------------------------------------------------------------
-    def absorb_order(self, order, catalog=None):
+    def absorb_order(self, order, catalog=None, probe=None):
         """收录单笔订单。返回 (新点亮项列表, 累加项列表)。
 
         :param order: 订单 dict（order-list 元素或 query-order 返回）
         :param catalog: catalog_mod.Catalog 实例或 None
+        :param probe: 可选的图片可用性校验函数（用于给绝版款补图）
         """
         new_items, bumped = [], []
         order_id = str(order.get("orderId") or "")
@@ -148,7 +167,7 @@ class CodexStore:
                 self._absorb_unit(
                     unit.get("productCode"), unit.get("name") or unit.get("productName"),
                     unit.get("quantity") or 1, create_time, store_name,
-                    catalog, new_items, bumped,
+                    catalog, new_items, bumped, probe,
                 )
             # 无子项的单品在外层已收录；组合餐父项（套餐本身）不单独收录，
             # 图鉴以单品级为原子单位。
@@ -164,7 +183,7 @@ class CodexStore:
         return new_items, bumped
 
     def _absorb_unit(self, code, name, quantity, create_time, store_name,
-                     catalog, new_items, bumped):
+                     catalog, new_items, bumped, probe=None):
         """收录一个单品级条目。
 
         图鉴条目 key = 归一化身份（防止同品分裂）:
@@ -173,6 +192,9 @@ class CodexStore:
         """
         code = str(code or "")
         name = str(name or code)
+        # 周边/玩具（泡泡机、毛绒、按摩捶…）不是餐品, 不进餐品图鉴
+        if catalog_mod.is_merch(name):
+            return
         catalog = catalog if catalog is not None and len(catalog) else None
         matched = catalog.match(code, name)[0] if catalog is not None else None
         key = str(matched) if matched else "n:" + rarity_mod.normalize_name(name)
@@ -190,13 +212,15 @@ class CodexStore:
             "count": quantity or 1,
             "image": "",
             "catalog_code": "",
+            # 订单侧商品编码（与菜单 code 是两套体系）: 池外餐品靠它回查官方图
+            "product_code": code,
         }
         if catalog is not None:
-            self._enrich_with_catalog(item, code, catalog)
+            self._enrich_with_catalog(item, code, catalog, probe)
         self.items[key] = item
         new_items.append(item)
 
-    def _enrich_with_catalog(self, item, code, catalog):
+    def _enrich_with_catalog(self, item, code, catalog, probe=None):
         """用图鉴池信息回填 item: 标准名/图片/册别/稀有度。"""
         matched, how = catalog.match(code, item["name"])
         if matched:
@@ -216,18 +240,58 @@ class CodexStore:
                 item["book"] = catalog_mod.BOOK_LIMITED
             else:
                 item["book"] = catalog_mod.book_of(item["name"])
+            if not item.get("image") and probe is not None:
+                self._backfill_image(item, code, probe)
 
-    def reclassify(self, catalog):
-        """全量重判（UR 复活机制: 菜单池扩充后 UR 可能回到在售）。"""
+    @staticmethod
+    def _backfill_image(item, code, probe):
+        """绝版款补图: 按商品编码推导官方图地址, 校验可用后才写入。"""
+        code = str(code or "")
+        if not code.isdigit():
+            return
+        url = IMAGE_URL_TEMPLATE.format(code=code)
+        if probe(url):
+            item["image"] = url
+
+    def reclassify(self, catalog, probe=None):
+        """全量重判并规范条目 key；菜单池扩充后 UR 可复活。
+
+        无菜单池时条目以 ``n:归一化名称`` 暂存。补充菜单池后若能命中标准
+        catalog code，就迁移到该 code；若目标条目已经存在则合并，避免后续
+        下单产生同款双条目。
+        """
         if catalog is None or not len(catalog):
             return []
         revived = []
-        for key, item in self.items.items():
+        rebuilt = {}
+        for old_key, item in list(self.items.items()):
             before = item.get("rarity")
-            self._enrich_with_catalog(item, key, catalog)
+            probe_code = (item.get("catalog_code") or item.get("product_code")
+                          or old_key)
+            self._enrich_with_catalog(item, probe_code, catalog, probe)
             if before == rarity_mod.RARITY_UR and item["rarity"] != rarity_mod.RARITY_UR:
                 revived.append(item["name"])
+            target_key = str(item.get("catalog_code") or old_key)
+            if target_key in rebuilt:
+                self._merge_items(rebuilt[target_key], item)
+            else:
+                rebuilt[target_key] = item
+        self.items = rebuilt
         return revived
+
+    @staticmethod
+    def _merge_items(target, incoming):
+        """合并两个已确认指向同一菜单餐品的图鉴条目。"""
+        target["count"] = target.get("count", 0) + incoming.get("count", 0)
+        old_time = target.get("first_unlock") or "9999"
+        new_time = incoming.get("first_unlock") or "9999"
+        if new_time < old_time:
+            target["first_unlock"] = incoming.get("first_unlock") or ""
+            target["store"] = incoming.get("store") or target.get("store") or ""
+        for field in ("name", "book", "rarity", "image", "catalog_code",
+                      "product_code"):
+            if incoming.get(field):
+                target[field] = incoming[field]
 
     # -- 统计 --------------------------------------------------------------
     def stats(self, catalog=None):
@@ -262,16 +326,36 @@ class CodexStore:
             any(c == d or it.get("catalog_code") == d for c, it in self.items.items())
             for d in dessert_pool))
 
+        # 图鉴池的稀有度分布（分享卡 / 格子墙顶部展示, 让人一眼看到梯度是否合理）
+        pool_by_rarity = {r: 0 for r in rarity_mod.RARITY_ORDER}
+        if catalog:
+            for entry in catalog.products.values():
+                r = entry.get("rarity") or rarity_mod.RARITY_R
+                pool_by_rarity[r] = pool_by_rarity.get(r, 0) + 1
+
+        mine_by_rarity = {r: 0 for r in rarity_mod.RARITY_ORDER}
+        for it in items:
+            r = it.get("rarity") or rarity_mod.RARITY_R
+            mine_by_rarity[r] = mine_by_rarity.get(r, 0) + 1
+
+        pool_total = len(catalog) if catalog else None
+        completion = (min(100, int(round(total / pool_total * 100)))
+                      if pool_total else 0)
+
         summary = {
             "unlocked": total,
             "level": level_no,
             "title": title,
             "by_book": by_book,
-            "pool_total": len(catalog) if catalog else None,
+            "pool_total": pool_total,
+            "completion": completion,
             "pool_by_book": ({b: len(v) for b, v in pool_by_book.items()}
                              if catalog else {}),
+            "pool_by_rarity": pool_by_rarity,
+            "mine_by_rarity": mine_by_rarity,
             "ur_count": ur_count,
             "ssr_count": ssr_count,
+            "sr_count": sum(1 for it in items if it["rarity"] == rarity_mod.RARITY_SR),
             "ssr_ur_count": ssr_count + ur_count,
             "potato_count": sum(1 for it in items if "薯" in it["name"]),
             "weekly_new": weekly_new,
@@ -307,6 +391,21 @@ def _ensure_parent(path):
         os.makedirs(parent, exist_ok=True)
 
 
+def _atomic_dump_json(path, payload):
+    """先写同目录临时文件再替换，避免中断留下半份状态 JSON。"""
+    _ensure_parent(path)
+    temp_path = path + ".tmp"
+    try:
+        with open(temp_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, ensure_ascii=False, indent=2)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temp_path, path)
+    finally:
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+
+
 def extract_orders(payload):
     """从 order-list 完整响应 / list / 单订单 dict 中提取订单列表。"""
     if isinstance(payload, str):
@@ -333,6 +432,16 @@ def _emit(obj):
     except AttributeError:
         pass
     print(json.dumps(obj, ensure_ascii=False, indent=2))
+
+
+def _rarity_mix(cat):
+    """图鉴池的稀有度分布（用于核对「越稀有越少」是否成立）。"""
+    mix = {r: 0 for r in rarity_mod.RARITY_ORDER}
+    for entry in cat.products.values():
+        r = entry.get("rarity") or rarity_mod.RARITY_R
+        mix[r] = mix.get(r, 0) + 1
+    total = sum(mix.values()) or 1
+    return {r: {"count": n, "pct": round(n * 100.0 / total, 1)} for r, n in mix.items()}
 
 
 # ---------------------------------------------------------------------------
@@ -367,20 +476,25 @@ def cmd_absorb_menu(args):
         "pool_size": len(cat),
         "added": added,
         "updated": updated,
+        "skipped_combos": len(cat.last_skipped_combos),
+        "skipped_merch": len(cat.last_skipped_merch),
+        "skipped_unknown": len(cat.last_skipped_unknown),
+        "rarity_mix": _rarity_mix(cat),
     })
 
 
 def cmd_absorb_order(args):
     store = CodexStore.load(args.codex)
     cat = _load_catalog_if_available(args.catalog)
+    probe = probe_image if args.probe_images else None
     orders = extract_orders(_load_json(args.order))
     new_all, bump_all = [], []
     for order in orders:
-        new_items, bumped = store.absorb_order(order, cat)
+        new_items, bumped = store.absorb_order(order, cat, probe)
         new_all.extend(new_items)
         bump_all.extend(bumped)
     if cat:
-        revived = store.reclassify(cat)
+        revived = store.reclassify(cat, probe)
     else:
         revived = []
     store.save(args.codex)
@@ -398,12 +512,13 @@ def cmd_absorb_order(args):
 def cmd_sync(args):
     store = CodexStore.load(args.codex)
     cat = _load_catalog_if_available(args.catalog)
+    probe = probe_image if args.probe_images else None
     orders = extract_orders(_load_json(args.orders))
     new_all = []
     for order in orders:
-        new_items, _ = store.absorb_order(order, cat)
+        new_items, _ = store.absorb_order(order, cat, probe)
         new_all.extend(new_items)
-    revived = store.reclassify(cat) if cat else []
+    revived = store.reclassify(cat, probe) if cat else []
     store.save(args.codex)
     _emit({
         "action": "sync",
@@ -434,6 +549,9 @@ def cmd_render(args):
     if args.out_card:
         outputs["share_card"] = render.render_share_card(
             store, cat, args.template, args.out_card)
+    if args.out_wall:
+        outputs["codex_wall"] = render.render_codex_wall(
+            store, cat, args.wall_template, args.out_wall)
     _emit({"action": "render", "outputs": outputs,
            "stats": store.stats(cat)})
 
@@ -454,12 +572,16 @@ def build_parser():
     p.add_argument("--order", required=True, help="订单 JSON 文件")
     p.add_argument("--codex", default=_default("data/codex.json"))
     p.add_argument("--catalog", default=_default("data/catalog.json"))
+    p.add_argument("--probe-images", action="store_true",
+                   help="按商品编码探测官方图地址，为绝版款补图（需联网）")
     p.set_defaults(func=cmd_absorb_order)
 
     p = sub.add_parser("sync", help="补录全部订单并重判稀有度")
     p.add_argument("--orders", required=True, help="order-list 响应 JSON 文件")
     p.add_argument("--codex", default=_default("data/codex.json"))
     p.add_argument("--catalog", default=_default("data/catalog.json"))
+    p.add_argument("--probe-images", action="store_true",
+                   help="按商品编码探测官方图地址，为绝版款补图（需联网）")
     p.set_defaults(func=cmd_sync)
 
     p = sub.add_parser("stats", help="输出图鉴统计（等级/称号/徽章）")
@@ -467,13 +589,17 @@ def build_parser():
     p.add_argument("--catalog", default=_default("data/catalog.json"))
     p.set_defaults(func=cmd_stats)
 
-    p = sub.add_parser("render", help="渲染 Markdown 图鉴与 HTML 分享卡")
+    p = sub.add_parser("render", help="渲染 Markdown 图鉴 / 图鉴格子墙 / HTML 分享卡")
     p.add_argument("--codex", default=_default("data/codex.json"))
     p.add_argument("--catalog", default=_default("data/catalog.json"))
     p.add_argument("--out-md", default=_default("output/codex.md"))
     p.add_argument("--out-card", default=_default("output/share-card.html"))
+    p.add_argument("--out-wall", default=_default("output/codex-wall.html"),
+                   help="图鉴格子墙输出路径（传空字符串可跳过）")
     p.add_argument("--template", default=None,
                    help="分享卡模板路径（缺省用脚本相对路径的默认模板）")
+    p.add_argument("--wall-template", default=None,
+                   help="格子墙模板路径（缺省用脚本相对路径的默认模板）")
     p.set_defaults(func=cmd_render)
 
     return parser

@@ -11,7 +11,7 @@
 | Token 申请 | <https://open.mcd.cn/mcp> |
 | 配置示例 | 见 [`mcp-config.example.json`](mcp-config.example.json)（仅环境变量占位符） |
 
-## 使用的 MCP Tools（5 个）
+## 使用的 MCP Tools（5 个图鉴核心工具）
 
 | Tool | 用途 | 在本项目中的角色 |
 |---|---|---|
@@ -21,8 +21,9 @@
 | `query-meal-detail` | 查询餐品详情及套餐组成 | 套餐拆解参考：理解组合餐结构，保证「单品级收录」口径一致 |
 | `query-order` | 查询订单详情 | **主动收录通道**：Skill 内下单后确认订单状态（已支付/未取消）再收录 |
 
-辅助链路（下单流程本身）：`calculate-price` → `create-order`，
-与麦当劳官方点餐流程一致。
+辅助工具：菜单采样使用 `now-time-info` 计算早餐预约日期；下单流程使用
+`calculate-price` → `create-order`。调用 `create-order` 前必须展示门店、商品、数量与金额，
+并取得用户对本次订单的明确确认。
 
 ## 核心调用流程
 
@@ -48,19 +49,28 @@ query-meals (storeCode, beType=1, orderType=1)              ← 当前时段菜�
 query-meals (storeCode, beType=1, orderType=1,
              reservationDate="yyyy-MM-dd 10:00")              ← 早餐时段菜单
   └→ 保存两份快照 → scripts/codex.py absorb-menu（一次事务式合并）
-       └→ 合并为多时段菜单池 data/catalog.json（148+ 款）
+       └→ 合并为多时段菜单池 data/catalog.json（76 款单品 / 148 个菜单编码）
 ```
 
 **为什么要双时段采样**：麦当劳菜单按餐段返回，早餐品（麦满分、营养卷、油条）
 仅出现在早餐时段菜单。只采当前时段会把大量早餐品误判为绝版（UR）。
 
+**为什么池里只有单品**：148 个菜单编码里近一半是「二件套 / 三件套 / 随心选 /
+分享餐」等套餐。图鉴的收录原子单位是订单子项（单品级），套餐会被展开成单品再收录，
+若同时进池就会让同一个汉堡占两格、让分母虚高。因此 `absorb-menu` 会跳过套餐
+（`skipped_combos`）、周边玩具（`skipped_merch`）和无名条目（`skipped_unknown`），
+并把同名多编码（「派」「脆薯饼」）合并成一格。
+
 MCP 调用仅在用户明确请求后按需执行；本项目不做后台轮询、批量循环或定时自动调用。
 如果任一菜单响应失败或不含有效餐品，本次不会覆盖已有图鉴池，也不会触发 UR 重判。
+同一门店同一时段只保留最近一次成功快照；图鉴池是各门店/时段最新快照的并集，
+因此餐品从所有当前快照消失后可被识别为下架，而不是永久残留在历史并集中。
 
 ### ③ 下单收录（主动收录，100% 可靠）
 
 ```
-query-meals → calculate-price → create-order → query-order（确认非取消）
+query-meals → calculate-price → 展示订单并取得明确确认 → create-order
+  → query-order（仅接受已支付/制作中/已完成等明确成功状态）
   └→ 保存订单快照 → scripts/codex.py absorb-order
 ```
 

@@ -5,54 +5,90 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>麦麦图鉴 · 我的足迹</title>
 <style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body {
-    font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
-    background: #f6f0e6;
-    display: flex; justify-content: center; padding: 32px 16px;
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{
+    font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
+    background:
+      radial-gradient(700px 400px at 8% -6%,#FFE7C4,rgba(255,231,196,0)),
+      radial-gradient(600px 380px at 96% 4%,#FFD8D1,rgba(255,216,209,0)),
+      #F6F0E6;
+    display:flex;justify-content:center;padding:30px 14px;
   }
-  .card {
-    width: 420px; border-radius: 20px; overflow: hidden;
-    background: #ffffff;
-    box-shadow: 0 12px 40px rgba(218, 41, 28, .18);
-  }
-  .head {
-    background: linear-gradient(135deg, #DA291C 0%, #b81f14 100%);
-    color: #fff; padding: 26px 24px 22px; text-align: center;
-  }
-  .head .logo { font-size: 26px; font-weight: 800; letter-spacing: 2px; }
-  .head .slogan { font-size: 12px; opacity: .85; margin-top: 6px; }
-  .head .big { font-size: 34px; font-weight: 800; margin-top: 14px; }
-  .head .big small { font-size: 14px; font-weight: 400; opacity: .8; }
-  .head .title { display: inline-block; margin-top: 10px; font-size: 13px;
-    background: #FFC72C; color: #7a4b00; font-weight: 700;
-    padding: 4px 14px; border-radius: 999px; }
-  .books { display: grid; grid-template-columns: repeat(3, 1fr);
-    gap: 8px; padding: 16px 20px 4px; }
-  .cell { background: #fdf3e3; border-radius: 12px; padding: 10px 4px; text-align: center; }
-  .cell .num { font-size: 22px; font-weight: 800; color: #DA291C; }
-  .cell .cap { font-size: 11px; color: #8a6d3b; margin-top: 2px; }
-  .section { padding: 14px 22px 4px; }
-  .section h3 { font-size: 12px; color: #b0894a; letter-spacing: 1px; margin-bottom: 8px; }
-  .prow { display: flex; align-items: center; gap: 8px; margin: 6px 0; }
-  .prow .pl { width: 64px; font-size: 12px; color: #5b4636; }
-  .pbar { flex: 1; height: 8px; background: #f0e6d2; border-radius: 99px; overflow: hidden; }
-  .pfill { height: 100%; background: linear-gradient(90deg, #FFC72C, #DA291C); border-radius: 99px; }
-  .prow .pv { width: 52px; text-align: right; font-size: 11px; color: #9c8465; }
-  .badges { display: flex; flex-wrap: wrap; gap: 6px; padding: 10px 22px 0; }
-  .badge { font-size: 11px; background: #fff4d6; border: 1px solid #f2d488;
-    color: #8a5a00; border-radius: 999px; padding: 3px 10px; }
-  .badge.muted { background: #f5f5f5; border-color: #e0e0e0; color: #aaa; }
-  .loves { margin: 14px 22px 0; background: #fdf6ea; border-radius: 14px;
-    padding: 12px 14px; }
-  .loves .row { display: flex; justify-content: space-between;
-    font-size: 13px; padding: 4px 0; color: #4a3a28; }
-  .loves .row b { color: #DA291C; }
-  .ur { margin: 10px 22px 0; text-align: center; font-size: 12px; color: #7a4b00;
-    background: linear-gradient(90deg, #fff2c9, #ffe1a8, #fff2c9);
-    border-radius: 999px; padding: 6px 10px; }
-  .foot { text-align: center; font-size: 11px; color: #c2ab8c;
-    padding: 16px 0 18px; letter-spacing: 1px; }
+  .card{width:420px;border-radius:22px;overflow:hidden;background:#fff;
+    box-shadow:0 16px 50px rgba(176,29,18,.2)}
+
+  /* 头部 */
+  .head{background:linear-gradient(140deg,#DA291C,#b01d12 62%,#8f150c);color:#fff;
+    padding:26px 24px 22px;text-align:center;position:relative;overflow:hidden}
+  .head::after{content:"";position:absolute;right:-60px;top:-70px;width:220px;height:220px;
+    border-radius:50%;background:radial-gradient(circle,rgba(255,199,44,.5),rgba(255,199,44,0) 68%)}
+  .head .logo{font-size:23px;font-weight:800;letter-spacing:2px;position:relative}
+  .head .slogan{font-size:11.5px;opacity:.82;margin-top:6px;position:relative}
+  .head .big{font-size:40px;font-weight:800;margin-top:16px;line-height:1;position:relative}
+  .head .big small{font-size:14px;font-weight:600;opacity:.78}
+  .head .pct{font-size:11.5px;opacity:.8;margin-top:7px;position:relative}
+  .head .title{display:inline-block;margin-top:11px;font-size:12.5px;
+    background:#FFC72C;color:#5c3a00;font-weight:800;padding:5px 15px;border-radius:999px;position:relative}
+
+  /* 我集到了什么 —— 分享卡的灵魂 */
+  .showcase{padding:16px 18px 4px}
+  .showcase h3,.section h3{font-size:11.5px;color:#b0894a;letter-spacing:1.2px;margin-bottom:9px;font-weight:700}
+  .mini{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .mini-cell{background:#FDF8EF;border:1.5px solid #EFE3CE;border-radius:12px;
+    overflow:hidden;display:flex;flex-direction:column}
+  .mini-cell .thumb{aspect-ratio:1/1;display:grid;place-items:center;position:relative;overflow:hidden;
+    background:radial-gradient(circle at 50% 42%,#FFFDF8,#F5EBD9)}
+  .mini-cell .thumb img{width:100%;height:100%;object-fit:contain;padding:5px;position:relative;z-index:1}
+  .thumb .ph{position:absolute;inset:0;display:grid;place-items:center;font-size:19px;opacity:.25}
+  .mini-cell figcaption{padding:5px 6px 7px;display:flex;flex-direction:column;gap:2px}
+  .mini-cell b{font-size:10.5px;font-weight:700;line-height:1.25;color:#33261c;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:2.5em}
+  .mini-cell i{font-style:normal;font-size:9px;font-weight:800;color:#A9988A;letter-spacing:.4px}
+  .mini-cell.r-sr{border-color:#BFD6FF}.mini-cell.r-sr i{color:#2F6FE4}
+  .mini-cell.r-ssr{border-color:#F3CE6B;background:#FFFBEC}.mini-cell.r-ssr i{color:#C98A00}
+  .mini-cell.r-ur{border:1.5px solid transparent;
+    background-image:linear-gradient(#fff,#fff),conic-gradient(from 0deg,#ff5f6d,#ffc371,#8ef6b8,#5fc3ff,#c58bff,#ff5f6d);
+    background-origin:border-box;background-clip:padding-box,border-box}
+  .mini-cell.r-ur i{color:#8b3fd0}
+  .mini.empty{border:1.5px dashed #E6DAC6;border-radius:12px;padding:18px 12px;color:#A9988A;
+    font-size:11.5px;text-align:center;line-height:1.7;display:block}
+
+  /* 最珍贵收藏 */
+  .treasure{margin:12px 18px 0;display:flex;align-items:center;gap:12px;
+    background:linear-gradient(120deg,#241A2E,#151019);border-radius:16px;padding:11px 13px;color:#F4EDE3}
+  .treasure .thumb{width:62px;height:62px;flex:0 0 auto;border-radius:11px;display:grid;place-items:center;
+    background:radial-gradient(circle at 50% 40%,#FFFCF4,#EFE4D1);overflow:hidden;position:relative}
+  .treasure .thumb img{width:100%;height:100%;object-fit:contain;padding:6px;position:relative;z-index:1}
+  .treasure .thumb .ph{position:absolute;inset:0;display:grid;place-items:center;font-size:22px;opacity:.35}
+  .treasure .tk{display:flex;flex-direction:column;gap:3px;min-width:0}
+  .treasure .tk i{font-style:normal;font-size:9.5px;color:#F7C6FF;font-weight:800;letter-spacing:.6px}
+  .treasure .tk b{font-size:14px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .treasure .tk small{font-size:9.5px;opacity:.55;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .treasure.empty{display:block;background:#F7F2E8;color:#A9988A;font-size:11.5px;text-align:center}
+
+  /* 分册进度 */
+  .section{padding:15px 20px 2px}
+  .prow{display:flex;align-items:center;gap:8px;margin:6px 0}
+  .prow .pl{width:64px;font-size:11.5px;color:#5b4636;font-weight:600}
+  .pbar{flex:1;height:7px;background:#F0E6D2;border-radius:99px;overflow:hidden}
+  .pfill{height:100%;background:linear-gradient(90deg,#FFC72C,#DA291C);border-radius:99px}
+  .prow .pv{width:52px;text-align:right;font-size:10.5px;color:#9c8465;font-variant-numeric:tabular-nums}
+  .books{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;padding:14px 20px 2px}
+  .books .cell{background:#FDF3E3;border-radius:11px;padding:9px 4px;text-align:center}
+  .books .num{font-size:20px;font-weight:800;color:#DA291C;line-height:1.1}
+  .books .cap{font-size:10.5px;color:#8a6d3b;margin-top:3px}
+
+  .badges{display:flex;flex-wrap:wrap;gap:5px;padding:12px 20px 0}
+  .badge{font-size:10.5px;background:#FFF4D6;border:1px solid #F2D488;color:#8a5a00;
+    border-radius:999px;padding:3px 9px;font-weight:600}
+  .badge.muted{background:#f5f5f5;border-color:#e0e0e0;color:#aaa}
+
+  .loves{margin:12px 20px 0;background:#FDF6EA;border-radius:13px;padding:10px 13px}
+  .loves .row{display:flex;justify-content:space-between;gap:10px;font-size:12px;padding:3px 0;color:#4a3a28}
+  .loves .row b{color:#DA291C;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ur{margin:10px 20px 0;text-align:center;font-size:11.5px;color:#7a4b00;font-weight:600;
+    background:linear-gradient(90deg,#fff2c9,#ffe1a8,#fff2c9);border-radius:999px;padding:6px 10px}
+  .foot{text-align:center;font-size:10.5px;color:#c2ab8c;padding:14px 0 16px;letter-spacing:.6px}
 </style>
 </head>
 <body>
@@ -61,20 +97,32 @@
       <div class="logo">🍟 麦麦图鉴</div>
       <div class="slogan">每一次点单，点亮图鉴里的一页</div>
       <div class="big">{{UNLOCKED}} <small>/ {{POOL_TOTAL}} 款</small></div>
+      <div class="pct">已集齐 {{COMPLETION}}% · 绝版 {{UR_COUNT}} 张</div>
       <div class="title">{{LEVEL}}</div>
     </div>
+
+    <div class="showcase">
+      <h3>我集到的这几格</h3>
+      {{HERO_GRID}}
+    </div>
+
+    {{TREASURE_CARD}}
+
     <div class="books">{{BOOK_CELLS}}</div>
+
     <div class="section">
       <h3>分册进度</h3>
       {{PROGRESS_ROWS}}
     </div>
+
     <div class="badges">{{BADGES}}</div>
+
     <div class="loves">
       <div class="row"><span>最爱的味道</span><b>{{FAVORITE}}</b></div>
       <div class="row"><span>最珍贵的收藏</span><b>{{TREASURE}}</b></div>
     </div>
     <div class="ur">💎 绝版款 × {{UR_COUNT}} —— 时代眼泪，买不到的荣耀</div>
-    <div class="foot">McD Codex · 麦麦图鉴 · 非麦当劳官方产品</div>
+    <div class="foot">McD Codex · 麦麦图鉴 · 非麦当劳官方产品 · {{GENERATED_AT}}</div>
   </div>
 </body>
 </html>
