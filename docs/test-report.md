@@ -7,8 +7,8 @@
 
 | 指标 | 结果 |
 |---|---|
-| 用例总数 | **112** |
-| 通过 | **112** |
+| 用例总数 | **113** |
+| 通过 | **113** |
 | 失败 / 错误 | 0 |
 | 测试耗时 | ~0.8s |
 | 累计发现缺陷 | **14 个（均已修复并补回归用例）** |
@@ -26,7 +26,7 @@
 | 单元 | `TestCatalogMatching` | 6 | 四通道匹配（code / 名称 / 别名 / 弱匹配）、未命中、在售判定 |
 | 单元 | `TestCatalogBuild` | 12 | 时段合并、幂等、tags 合并、同名多 code 合并、套餐剔除、全套餐响应拒绝、真实快照池规模、失败响应拒绝、原子回滚、快照替换/并集、无状态字段兼容 |
 | 集成 | `TestAbsorbOrder` | 13 | 组合餐展开、单品直购、取消单、订单幂等、数量累加、同品合并、口味槽位合并、无池降级、门店聚合、首次点亮时间不变 |
-| 集成 | `TestReclassifyRevive` | 4 | UR 复活、空池保护、临时 key 迁移、迁移时去重合并 |
+| 集成 | `TestReclassifyRevive` | 5 | UR 复活、多门店并集复活（单门店误判绝版）、空池保护、临时 key 迁移、迁移时去重合并 |
 | 单元 | `TestStats` | 5 | 等级 9 个边界值、3 类徽章、最爱/珍宝 |
 | 单元 | `TestStatsExtras` | 1 | 池内稀有度分布、完成度、我的稀有度分布 |
 | 集成 | `TestRender` | 7 | Markdown 六册与剪影、进度上限、HTML 动态文本转义、分享卡占位符零残留、无池渲染、默认模板回落、模板路径存在性 |
@@ -129,7 +129,8 @@
 |:--:|---|---|---|---|
 | 8（高） | SSR 占全池 55%、早餐册 100% 限定 | 「仅早餐时段供应」被判 SSR | 稀有度改按限定属性分层，时段退出判定 | `test_period_does_not_affect_rarity`、`test_breakfast_book_is_not_all_limited`、`test_ssr_ratio_in_range` |
 | 9（高） | 「限定特惠」打折被当成限定商品 | 标签子串匹配过宽 | 促销标签白名单排除 | `test_promo_tag_is_not_limited` |
-| 10（高） | 图鉴池混入 68 款套餐，分母 148 虚高 | 采样未做单品过滤，与「原子单位=单品」自相矛盾 | `combo_of()` 三重判定 + 周边过滤 + 无名条目过滤 | `test_combo_excluded_from_pool`、`test_all_combo_payload_rejected`、`test_single_item_pool_has_no_combo` |
+| 10（高） | 图鉴池混入 99 款套餐，分母虚高 | 采样未做单品过滤，与「原子单位=单品」自相矛盾 | `combo_of()` 三重判定 + 周边过滤 + 无名条目过滤 | `test_combo_excluded_from_pool`、`test_all_combo_payload_rejected`、`test_single_item_pool_has_no_combo` |
+| 10b（高） | 单门店采样把在售餐品误判为绝版 | 池只来自一家门店 | 多门店菜单取并集 + 复活机制重判 | `test_ur_revives_with_second_store` |
 | 11（中） | 同名多编码重复占格（派 / 脆薯饼） | 图鉴池按 code 存储，未按身份去重 | `_merge_duplicate_names()` | `test_duplicate_name_multiple_codes` |
 | 12（中） | 视觉层缺失：只有数字与进度条 | 渲染层只输出统计卡 | 新增 `render_codex_wall()` + 重做分享卡 + Markdown 图片表格 | `TestCodexWall`、`TestMarkdownVisual` |
 | 13（中） | `??？` 半角全角混排、5% 进度显示为空 | `progress//10` 只取整十格 | 统一 `???`；进度条支持 1/8 格 | `test_no_mixed_question_marks`、`test_progress_bar_has_granularity` |
@@ -141,13 +142,14 @@
 |---|---|---|
 | 实时查询订单 | 真实调用 `order-list` | 成功，10 单（9 完成 / 1 取消） |
 | 时间核验 | 真实调用 `now-time-info` | 成功（2026-10-11 01:59:36，GMT+8） |
-| 图鉴池 | 真实 `query-meals` 双时段采样 | 148 个菜单编码 → 剔除 68 套餐 / 2 周边 / 1 无名 → 合并同名后 **76 款单品**（汉堡 7 / 早餐 18 / 小食 13 / 甜品 9 / 饮品 27 / 限定 2） |
-| 稀有度梯度 | 池内分布统计 | R 48 (63%) / SR 20 (26%) / SSR 8 (11%)，单调递减 ✓ |
+| 图鉴池 | 真实 `query-meals` 两门店 × 双时段采样 | 208 个菜单编码 → 剔除 99 套餐 / 2 周边 / 1 无名 → 合并同名后 **93 款单品**（汉堡 15 / 早餐 22 / 小食 18 / 甜品 9 / 饮品 27 / 限定 2） |
+| 稀有度梯度 | 池内分布统计 | R 56 (60%) / SR 21 (23%) / SSR 16 (17%)，单调递减 ✓ |
 | 冷启动补录 | 全新建 codex 状态 | 点亮 13 款，等级 Lv.2 常客 |
 | 幂等复录 | 同一批订单二次 sync | 新增 0，点亮数稳定 13 |
 | 取消单排除 | 校验取消单子项 | 「韩式甜辣酱鸡块」等未入图鉴 ✓ |
-| UR 检测 | 对比菜单池 | 「培根蔬萃双层牛堡」「泰式炭烤风味猪猪堡」判 UR ✓ |
-| UR 补图 | `--probe-images` HEAD 校验 | 命中 MS_1106 / MS_521879，写入后浏览器渲染正常 ✓ |
+| UR 检测 | 对比菜单池 | 「泰式炭烤风味猪猪堡」判 UR ✓ |
+| UR 复活 | 单门店 → 双门店采样 | 「培根蔬萃双层牛堡」由 UR 复活为常规款 ✓ |
+| UR 补图 | `--probe-images` HEAD 校验 | 命中 MS_521879，写入后浏览器渲染正常 ✓ |
 | 渲染 | 格子墙 + 分享卡 + Markdown | 占位符零残留、页面 1280px / 460px 两档截图目视确认 ✓ |
 | 离线 Demo | `python scripts/demo.py` | 5 个产物齐备，全程无 MCP 调用 ✓ |
 | Skill 安装完整性 | 语法编译 + frontmatter + 仓库/安装目录一致性 | PASS（0 问题） |

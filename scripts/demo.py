@@ -7,9 +7,12 @@
     python scripts/demo.py --open     # 顺便在浏览器里打开图鉴墙
     python scripts/demo.py --serve    # 起一个本地静态服务器（默认 8765）
 
+示例数据是**两个门店 × 两个时段**的菜单（1440001 / 1440040）——
+单门店采样会把「别家门店在卖」的餐品误判成绝版，多门店取并集才准。
+
 产物（全部写进 demo/）:
-    demo/catalog.json   图鉴池（76 款单品）
-    demo/codex.json     个人图鉴（13 款点亮，含 2 张绝版卡）
+    demo/catalog.json   图鉴池（93 款单品）
+    demo/codex.json     个人图鉴（13 款点亮，含绝版卡）
     demo/codex.md       Markdown 图鉴（GitHub 可视）
     demo/card.html      分享卡
     demo/wall.html      图鉴格子墙  ← 先看这个
@@ -31,11 +34,14 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 EXAMPLES = os.path.join(ROOT, "examples")
 DEMO = os.path.join(ROOT, "demo")
 
-INPUTS = {
-    "regular": "menu-regular.json",
-    "breakfast": "menu-breakfast.json",
-    "orders": "order-list.json",
-}
+# (storeCode, 时段, 快照文件) —— 两家门店取并集
+MENUS = [
+    ("1440001", "regular", "menu-regular.json"),
+    ("1440001", "breakfast", "menu-breakfast.json"),
+    ("1440040", "regular", "menu-store2-regular.json"),
+    ("1440040", "breakfast", "menu-store2-breakfast.json"),
+]
+ORDERS = "order-list.json"
 
 
 class DemoError(RuntimeError):
@@ -56,27 +62,27 @@ def build(demo_dir=DEMO, examples_dir=None, quiet=False):
     os.makedirs(demo_dir, exist_ok=True)
 
     cat = catalog_mod.Catalog()
-    cat.absorb_menu(_load(INPUTS["regular"], base), period="regular", store="DEMO")
-    cat.absorb_menu(_load(INPUTS["breakfast"], base), period="breakfast", store="DEMO")
+    for store, period, name in MENUS:
+        cat.absorb_menu(_load(name, base), period=period, store=store)
     cat_path = os.path.join(demo_dir, "catalog.json")
     cat.save(cat_path)
 
-    store = codex_mod.CodexStore()
-    for order in codex_mod.extract_orders(_load(INPUTS["orders"], base)):
-        store.absorb_order(order, cat)
-    store.reclassify(cat)
+    store_obj = codex_mod.CodexStore()
+    for order in codex_mod.extract_orders(_load(ORDERS, base)):
+        store_obj.absorb_order(order, cat)
+    store_obj.reclassify(cat)
     codex_path = os.path.join(demo_dir, "codex.json")
-    store.save(codex_path)
+    store_obj.save(codex_path)
 
     md_path = os.path.join(demo_dir, "codex.md")
     with open(md_path, "w", encoding="utf-8") as f:
-        f.write(render_mod.render_markdown(store, cat))
+        f.write(render_mod.render_markdown(store_obj, cat))
     card_path = render_mod.render_share_card(
-        store, cat, None, os.path.join(demo_dir, "card.html"))
+        store_obj, cat, None, os.path.join(demo_dir, "card.html"))
     wall_path = render_mod.render_codex_wall(
-        store, cat, None, os.path.join(demo_dir, "wall.html"))
+        store_obj, cat, None, os.path.join(demo_dir, "wall.html"))
 
-    stats = store.stats(cat)
+    stats = store_obj.stats(cat)
     if not quiet:
         print(_summary(stats))
     return stats, {"catalog": cat_path, "codex": codex_path, "markdown": md_path,

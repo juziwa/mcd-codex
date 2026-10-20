@@ -214,6 +214,7 @@ def render_markdown(store, catalog=None):
         lines.append("")
 
     lines.append("---")
+    lines.append("")
     if stats["favorite"]:
         lines.append("最爱的味道：**%s**（%d 次）" % (
             stats["favorite"]["name"], stats["favorite"]["count"]))

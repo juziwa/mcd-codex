@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "created_at": "2026-10-11 01:33:38",
-  "last_sync": "2026-10-20 09:40:10",
+  "created_at": "2026-10-20 09:48:12",
+  "last_sync": "2026-10-20 09:48:12",
   "items": {
     "521316": {
       "name": "高达吉士双牛堡",
@@ -11,7 +11,8 @@
       "store": "麦当劳深圳利联星龙园餐厅",
       "count": 2,
       "image": "https://menu-img.mcd.cn/pcm/prod/menu/20260309/product/MS_521316_320.png",
-      "catalog_code": "521316"
+      "catalog_code": "521316",
+      "product_code": "521316"
     },
     "9900015165": {
       "name": "派",
@@ -21,7 +22,8 @@
       "store": "麦当劳深圳利联星龙园餐厅",
       "count": 3,
       "image": "https://menu-img.mcd.cn/pcm/prod/menu/ProductPool/product/MS_G9900015165_320.png",
-      "catalog_code": "9900015165"
+      "catalog_code": "9900015165",
+      "product_code": "4106"
     },
     "513113": {
       "name": "图林根香肠早安营养卷",
@@ -31,7 +33,8 @@
       "store": "麦当劳珠海唐家福乐购百货餐厅",
       "count": 1,
       "image": "https://menu-img.mcd.cn/pcm/prod/menu/ProductPool/product/MS_513113_320.png",
-      "catalog_code": "513113"
+      "catalog_code": "513113",
+      "product_code": "902323"
     },
     "2631": {
       "name": "脆香油条",
@@ -41,7 +44,8 @@
       "store": "麦当劳珠海唐家福乐购百货餐厅",
       "count": 1,
       "image": "https://menu-img.mcd.cn/pcm/prod/menu/ProductPool/product/MS_2631_320.png",
-      "catalog_code": "2631"
+      "catalog_code": "2631",
+      "product_code": "902631"
     },
     "1088": {
       "name": "优品豆浆",
@@ -51,7 +55,8 @@
       "store": "麦当劳珠海唐家福乐购百货餐厅",
       "count": 1,
       "image": "https://menu-img.mcd.cn/pcm/prod/menu/ProductPool/product/MS_1088_320.png",
-      "catalog_code": "1088"
+      "catalog_code": "1088",
+      "product_code": "901089"
     },
     "n:泰式炭烤风味猪猪堡": {
       "name": "泰式炭烤风味猪猪堡",
@@ -61,7 +66,8 @@
       "store": "麦当劳珠海唐家福乐购百货餐厅",
       "count": 1,
       "image": "",
-      "catalog_code": ""
+      "catalog_code": "",
+      "product_code": "521879"
     },
     "4810": {
       "name": "薯条",
@@ -71,7 +77,8 @@
       "store": "麦当劳珠海唐家福乐购百货餐厅",
       "count": 13,
       "image": "https://menu-img.mcd.cn/pcm/prod/menu/20250523/product/MS_G4810_320_1747877491921.png",
-      "catalog_code": "4810"
+      "catalog_code": "4810",
+      "product_code": "501205"
     },
     "1401": {
       "name": "麦乐鸡",
@@ -81,7 +88,8 @@
       "store": "麦当劳珠海唐家福乐购百货餐厅",
       "count": 5,
       "image": "https://menu-img.mcd.cn/pcm/prod/menu/20260529/product/MS_G1401_320.png",
-      "catalog_code": "1401"
+      "catalog_code": "1401",
+      "product_code": "901401"
     },
     "9900008751": {
       "name": "可乐",
@@ -91,7 +99,8 @@
       "store": "麦当劳珠海唐家福乐购百货餐厅",
       "count": 6,
       "image": "https://menu-img.mcd.cn/pcm/prod/menu/ProductPool/product/MS_9900008751_320.gif",
-      "catalog_code": "9900008751"
+      "catalog_code": "9900008751",
+      "product_code": "903100"
     },
     "1440": {
       "name": "麦辣鸡腿汉堡",
@@ -101,7 +110,8 @@
       "store": "麦当劳广州火车东站餐厅",
       "count": 3,
       "image": "https://menu-img.mcd.cn/pcm/prod/menu/20260325/product/MS_1440_320.png",
-      "catalog_code": "1440"
+      "catalog_code": "1440",
+      "product_code": "1440"
     },
     "521990": {
       "name": "枫糖风味厚松饼猪柳堡",
@@ -111,7 +121,8 @@
       "store": "麦当劳珠海虹晖一路餐厅",
       "count": 1,
       "image": "https://menu-img.mcd.cn/pcm/prod/menu/ProductPool/product/MS_521990_320.png",
-      "catalog_code": "521990"
+      "catalog_code": "521990",
+      "product_code": "521731"
     },
     "521741": {
       "name": "脆薯饼",
@@ -121,17 +132,19 @@
       "store": "麦当劳珠海虹晖一路餐厅",
       "count": 1,
       "image": "https://menu-img.mcd.cn/pcm/prod/menu/ProductPool/product/MS_521741_320.png",
-      "catalog_code": "521741"
+      "catalog_code": "521741",
+      "product_code": "521732"
     },
-    "n:培根蔬萃双层牛堡": {
+    "1106": {
       "name": "培根蔬萃双层牛堡",
       "book": "汉堡册",
-      "rarity": "UR",
+      "rarity": "R",
       "first_unlock": "2026-06-21 17:39:44",
       "store": "麦当劳珠海虹晖一路餐厅",
       "count": 1,
-      "image": "",
-      "catalog_code": ""
+      "image": "https://menu-img.mcd.cn/pcm/prod/menu/20260309/product/MS_1106_320.png",
+      "catalog_code": "1106",
+      "product_code": "1106"
     }
   },
   "stores": {

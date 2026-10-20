@@ -529,6 +529,29 @@ class TestReclassifyRevive(unittest.TestCase):
         self.assertNotIn(key, store.items)
         self.assertEqual(store.items["521316"]["rarity"], rarity_mod.RARITY_SSR)
 
+    def test_ur_revives_with_second_store(self):
+        """单门店采样会把「别家门店在售」的餐品误判成绝版。
+
+        真实案例: 「培根蔬萃双层牛堡」在门店 1440001 的菜单里缺席, 被判 UR;
+        补入门店 1440040 的菜单后重新出现在售, 自动复活。
+        """
+        cat = catalog_mod.Catalog()
+        cat.absorb_menu(_load_example("menu-regular.json"),
+                        period="regular", store="S1")
+        cat.absorb_menu(_load_example("menu-breakfast.json"),
+                        period="breakfast", store="S1")
+        store = codex_mod.CodexStore()
+        store.absorb_order(_order("B1", "订单已完成",
+                                  [("1106", "培根蔬萃双层牛堡", 1, None)]), cat)
+        item = next(iter(store.items.values()))
+        self.assertEqual(item["rarity"], "UR")
+
+        cat.absorb_menu(_load_example("menu-store2-regular.json"),
+                        period="regular", store="S2")
+        revived = store.reclassify(cat)
+        self.assertIn("培根蔬萃双层牛堡", revived)
+        self.assertNotEqual(next(iter(store.items.values()))["rarity"], "UR")
+
     def test_no_catalog_item_migrates_and_merges_without_duplication(self):
         store = codex_mod.CodexStore()
         store.absorb_order(_order("M1", "订单已完成",
@@ -1135,8 +1158,9 @@ class TestOfflineDemo(unittest.TestCase):
             stats, paths = demo_mod.build(tmp, examples_dir=EXAMPLES, quiet=True)
             for kind in ("catalog", "codex", "markdown", "card", "wall"):
                 self.assertTrue(os.path.exists(paths[kind]), kind)
-            self.assertGreater(stats["pool_total"], 70)
-            self.assertEqual(stats["ur_count"], 2)
+            self.assertGreater(stats["pool_total"], 85)
+            # 双门店并集后「培根蔬萃双层牛堡」复活, 只剩「泰式炭烤」一张绝版卡
+            self.assertEqual(stats["ur_count"], 1)
             with open(paths["wall"], "r", encoding="utf-8") as f:
                 self.assertNotIn("{{", f.read())
         finally:
