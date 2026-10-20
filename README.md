@@ -77,6 +77,13 @@ python scripts/demo.py --open
 
 ![绝版殿堂](assets/preview/codex-ur.png)
 
+<details>
+<summary>展开看整面墙（六册长图 · 93 格）</summary>
+
+![完整图鉴格子墙](assets/preview/codex-wall.png)
+
+</details>
+
 ### 稀有度：越稀有越少
 
 收集玩法的地基是**梯度**。旧版把「仅早餐时段供应」直接判成 `SSR`，
