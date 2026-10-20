@@ -60,6 +60,19 @@ python "<Skill根目录>/scripts/codex.py" stats
 早餐采样在常规参数基础上加 `reservationDate: "yyyy-MM-dd 10:00"`。先调用
 `now-time-info` 获取北京时间并计算下一天日期，**不得把“次日 10:00”原样作为参数**。
 
+### 存快照前先剥壳（必读）
+
+`mcd-mcp` 的返回不是裸 JSON：`content[0].text` 是「**字段说明 markdown + `## Original Response` + 原始 JSON**」。
+`absorb-menu` / `sync` 只接受**原始 JSON 对象**，把整段 text 原样存成 `.json` 会报
+`query-meals 响应不是有效 JSON`。存快照时只保留 `## Original Response` 之后那一段：
+
+```json
+{"success": true, "code": 200, "data": {...}}
+```
+
+判据：存下来的文件**必须以 `{` 开头、`}` 结尾，且 `json.load` 能解析**。
+`success !== true` 或 `code !== 200` 的响应不要落盘覆盖旧快照——当作本次采样失败。
+
 ## 流程编排
 
 ### 流程 A · 打开图鉴（含冷启动补录）
@@ -113,6 +126,8 @@ python "<Skill根目录>/scripts/codex.py" stats
    因此已从所有当前快照消失的餐品可被重新判为 UR，而不会永久残留为在售。
    **建议至少采样两家门店**：只采一家会把「本店没上、别家还在卖」的餐品误判成绝版
    （实测「培根蔬萃双层牛堡」就是这样被误判又被并集救回来的）。
+   采样门店越多池越全——实测同一城市的 2 家店并集出 94 款、扩到 4 家升到 97 款；
+   反过来，UR 判定只在「所有已采样门店都没有」时才成立，所以门店覆盖越广，UR 越可信。
 5. 再跑一次流程 A 的 sync，稀有度与绝版状态会自动重判
 
 ### 流程 D · 展示与分享

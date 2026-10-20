@@ -25,6 +25,27 @@
 `calculate-price` → `create-order`。调用 `create-order` 前必须展示门店、商品、数量与金额，
 并取得用户对本次订单的明确确认。
 
+## ⚠️ 响应要先剥壳再落盘
+
+`mcd-mcp` 返回的 `content[0].text` **不是裸 JSON**，而是：
+
+```
+# API Response Information
+## Response Structure        ← 字段说明（markdown）
+...
+## Original Response
+{"success":true,"code":200,"data":{...}}    ← 真正要存的部分
+```
+
+本项目所有 CLI 只吃**原始 JSON**。把整段 text 存成 `.json` 会得到
+`query-meals 响应不是有效 JSON`。落盘规则：
+
+1. 取 `## Original Response` 之后的那一段（或最后一个能完整解析的 JSON 对象）
+2. 校验 `json.load` 能解析、`success === true`、`code === 200`
+3. 任一不满足 → 本次采样作废，**不要覆盖已有快照**（旧池比脏池安全）
+
+`order-list` / `query-meals` / `query-order` 都有这层包装，一视同仁。
+
 ## 核心调用流程
 
 ### ① 首次打开 / 增量补录
