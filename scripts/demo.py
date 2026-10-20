@@ -83,13 +83,23 @@ def build(demo_dir=DEMO, examples_dir=None, quiet=False):
         store_obj, cat, None, os.path.join(demo_dir, "wall.html"))
 
     stats = store_obj.stats(cat)
+    paths = {"catalog": cat_path, "codex": codex_path, "markdown": md_path,
+             "card": card_path, "wall": wall_path}
     if not quiet:
-        print(_summary(stats))
-    return stats, {"catalog": cat_path, "codex": codex_path, "markdown": md_path,
-                   "card": card_path, "wall": wall_path}
+        print(_summary(stats, paths))
+    return stats, paths
 
 
-def _summary(stats):
+def _show(path):
+    """相对于当前工作目录的短路径，方便直接复制执行。"""
+    try:
+        rel = os.path.relpath(path)
+    except ValueError:          # Windows 跨盘符
+        rel = path
+    return rel.replace(os.sep, "/")
+
+
+def _summary(stats, paths=None):
     pool = stats.get("pool_total") or 0
     mix = stats.get("pool_by_rarity") or {}
     lines = []
@@ -109,9 +119,17 @@ def _summary(stats):
         lines.append("  最珍贵   %s（%s）" % (
             stats["treasure"]["name"], stats["treasure"]["rarity"]))
     lines.append("  " + "-" * 46)
-    lines.append("  demo/wall.html    图鉴格子墙（先看这个）")
-    lines.append("  demo/card.html    分享卡")
-    lines.append("  demo/codex.md     Markdown 图鉴")
+    if paths:
+        rows = [(_show(paths["wall"]), "图鉴格子墙（先看这个）"),
+                (_show(paths["card"]), "分享卡"),
+                (_show(paths["markdown"]), "Markdown 图鉴")]
+        width = max([len(p) for p, _ in rows] + [26])
+        for path, label in rows:
+            lines.append("  %-*s  %s" % (width, path, label))
+    else:
+        lines.append("  demo/wall.html    图鉴格子墙（先看这个）")
+        lines.append("  demo/card.html    分享卡")
+        lines.append("  demo/codex.md     Markdown 图鉴")
     lines.append("")
     return "\n".join(lines)
 
